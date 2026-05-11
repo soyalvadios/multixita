@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Alert, ActivityIndicator, Modal,
+  Image, Alert, ActivityIndicator, Modal, Text, TextInput,
 } from 'react-native';
-import { Text, TextInput, Menu } from 'react-native-paper';
+
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { registrarVehiculo, misVehiculos, subirFoto, miFoto, cambiarPassword, editarVehiculo, buildFileUrl } from '../services/api';
@@ -43,12 +43,10 @@ function ModalEditarVehiculo({ vehiculo, onCerrar, onGuardado }) {
     color:  vehiculo.color  || '',
     tipo:   vehiculo.tipo   || 'auto',
   });
-  const [menuVisible, setMenu] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
 
   const set = (c) => (v) => setForm({ ...form, [c]: v });
-  const tipoLabel = TIPOS.find(t => t.value === form.tipo)?.label || 'Automóvil';
 
   const guardar = async () => {
     if (!form.placas || !form.color) { setError('Placas y color son obligatorios'); return; }
@@ -78,40 +76,33 @@ function ModalEditarVehiculo({ vehiculo, onCerrar, onGuardado }) {
 
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.inputLabel}>Placas *</Text>
-            <TextInput value={form.placas} onChangeText={set('placas')} mode="outlined"
-              style={styles.input} autoCapitalize="characters"
-              activeOutlineColor="#2E7D32" outlineColor="#ddd" theme={{ roundness: 10 }}/>
+            <TextInput value={form.placas} onChangeText={set('placas')} autoCapitalize="characters"
+              style={[styles.input, styles.inputNativo]} placeholder="" placeholderTextColor="#aaa"/>
 
             <Text style={styles.inputLabel}>Marca</Text>
-            <TextInput value={form.marca} onChangeText={set('marca')} mode="outlined"
-              style={styles.input} activeOutlineColor="#2E7D32" outlineColor="#ddd"
-              theme={{ roundness: 10 }} placeholder="Ej. Chevrolet"/>
+            <TextInput value={form.marca} onChangeText={set('marca')}
+              style={[styles.input, styles.inputNativo]} placeholder="Ej. Chevrolet" placeholderTextColor="#aaa"/>
 
             <Text style={styles.inputLabel}>Modelo</Text>
-            <TextInput value={form.modelo} onChangeText={set('modelo')} mode="outlined"
-              style={styles.input} activeOutlineColor="#2E7D32" outlineColor="#ddd"
-              theme={{ roundness: 10 }} placeholder="Ej. Beat"/>
+            <TextInput value={form.modelo} onChangeText={set('modelo')}
+              style={[styles.input, styles.inputNativo]} placeholder="Ej. Beat" placeholderTextColor="#aaa"/>
 
             <Text style={styles.inputLabel}>Color *</Text>
-            <TextInput value={form.color} onChangeText={set('color')} mode="outlined"
-              style={styles.input} activeOutlineColor="#2E7D32" outlineColor="#ddd"
-              theme={{ roundness: 10 }} placeholder="Ej. Blanco"/>
+            <TextInput value={form.color} onChangeText={set('color')}
+              style={[styles.input, styles.inputNativo]} placeholder="Ej. Blanco" placeholderTextColor="#aaa"/>
 
             <Text style={styles.inputLabel}>Tipo de vehículo</Text>
-            <Menu
-              visible={menuVisible}
-              onDismiss={() => setMenu(false)}
-              anchor={
-                <TouchableOpacity style={styles.dropdownBox} onPress={() => setMenu(true)}>
-                  <Text style={styles.dropdownTexto}>{tipoLabel}</Text>
-                  <Text style={styles.dropdownChevron}>▾</Text>
-                </TouchableOpacity>
-              }
-            >
+            <View style={styles.tipoRow}>
               {TIPOS.map((t) => (
-                <Menu.Item key={t.value} title={t.label} onPress={() => { set('tipo')(t.value); setMenu(false); }}/>
+                <TouchableOpacity key={t.value}
+                  style={[styles.tipoBtn, form.tipo === t.value && styles.tipoBtnSel]}
+                  onPress={() => set('tipo')(t.value)}>
+                  <Text style={[styles.tipoBtnTxt, form.tipo === t.value && styles.tipoBtnTxtSel]}>
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
               ))}
-            </Menu>
+            </View>
 
             {!!error && <View style={styles.errorBox}><Text style={styles.errorTexto}>{error}</Text></View>}
 
@@ -140,7 +131,6 @@ export default function PerfilScreen() {
   const [form, setForm]                   = useState({ placas: '', marca: '', modelo: '', color: '', tipo: 'auto' });
   const [errorVeh, setErrorVeh]           = useState('');
   const [cargandoVeh, setCargandoVeh]     = useState(false);
-  const [menuVisible, setMenu]            = useState(false);
   const [fotoUri, setFotoUri]             = useState(null);
   const [subiendoFoto, setSubiendo]       = useState(false);
   const [vehiculoEditar, setVehEditar]    = useState(null); // vehículo seleccionado para editar
@@ -233,7 +223,6 @@ export default function PerfilScreen() {
   };
 
   const tipoIcono = (tipo) => tipo === 'moto' ? '🏍️' : tipo === 'otro' ? '🚐' : '🚗';
-  const tipoLabel = TIPOS.find(t => t.value === form.tipo)?.label || 'Automóvil';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
@@ -304,37 +293,33 @@ export default function PerfilScreen() {
           </View>
 
           <Text style={styles.inputLabel}>Placas *</Text>
-          <TextInput value={form.placas} onChangeText={set('placas')} mode="outlined" style={styles.input}
-            autoCapitalize="characters" activeOutlineColor="#2E7D32" outlineColor="#ddd"
-            theme={{ roundness: 10 }} placeholder="Ej. NYS380A"/>
+          <TextInput value={form.placas} onChangeText={set('placas')} autoCapitalize="characters"
+              style={[styles.input, styles.inputNativo]} placeholder="Ej. NYS380A" placeholderTextColor="#aaa"/>
 
           <Text style={styles.inputLabel}>Marca</Text>
-          <TextInput value={form.marca} onChangeText={set('marca')} mode="outlined" style={styles.input}
-            activeOutlineColor="#2E7D32" outlineColor="#ddd" theme={{ roundness: 10 }} placeholder="Ej. Chevrolet"/>
+          <TextInput value={form.marca} onChangeText={set('marca')}
+              style={[styles.input, styles.inputNativo]} placeholder="Ej. Chevrolet" placeholderTextColor="#aaa"/>
 
           <Text style={styles.inputLabel}>Modelo</Text>
-          <TextInput value={form.modelo} onChangeText={set('modelo')} mode="outlined" style={styles.input}
-            activeOutlineColor="#2E7D32" outlineColor="#ddd" theme={{ roundness: 10 }} placeholder="Ej. Beat"/>
+          <TextInput value={form.modelo} onChangeText={set('modelo')}
+              style={[styles.input, styles.inputNativo]} placeholder="Ej. Beat" placeholderTextColor="#aaa"/>
 
           <Text style={styles.inputLabel}>Color *</Text>
-          <TextInput value={form.color} onChangeText={set('color')} mode="outlined" style={styles.input}
-            activeOutlineColor="#2E7D32" outlineColor="#ddd" theme={{ roundness: 10 }} placeholder="Ej. Blanco"/>
+          <TextInput value={form.color} onChangeText={set('color')}
+              style={[styles.input, styles.inputNativo]} placeholder="Ej. Blanco" placeholderTextColor="#aaa"/>
 
           <Text style={styles.inputLabel}>Tipo de vehículo *</Text>
-          <Menu
-            visible={menuVisible}
-            onDismiss={() => setMenu(false)}
-            anchor={
-              <TouchableOpacity style={styles.dropdownBox} onPress={() => setMenu(true)}>
-                <Text style={styles.dropdownTexto}>{tipoLabel}</Text>
-                <Text style={styles.dropdownChevron}>▾</Text>
-              </TouchableOpacity>
-            }
-          >
+          <View style={styles.tipoRow}>
             {TIPOS.map((t) => (
-              <Menu.Item key={t.value} title={t.label} onPress={() => { set('tipo')(t.value); setMenu(false); }}/>
+              <TouchableOpacity key={t.value}
+                style={[styles.tipoBtn, form.tipo === t.value && styles.tipoBtnSel]}
+                onPress={() => set('tipo')(t.value)}>
+                <Text style={[styles.tipoBtnTxt, form.tipo === t.value && styles.tipoBtnTxtSel]}>
+                  {t.label}
+                </Text>
+              </TouchableOpacity>
             ))}
-          </Menu>
+          </View>
 
           {!!errorVeh && <View style={styles.errorBox}><Text style={styles.errorTexto}>{errorVeh}</Text></View>}
 
@@ -346,22 +331,16 @@ export default function PerfilScreen() {
         {/* 🔒 Cambiar contraseña */}
         <SeccionColapsable icono="🔒" titulo="Cambiar contraseña">
           <Text style={styles.inputLabel}>Contraseña actual</Text>
-          <TextInput value={passForm.actual} onChangeText={setPass('actual')} mode="outlined"
-            style={styles.input} secureTextEntry={!verActual} activeOutlineColor="#2E7D32"
-            outlineColor="#ddd" theme={{ roundness: 10 }}
-            right={<TextInput.Icon icon={verActual ? 'eye-off' : 'eye'} onPress={() => setVerActual(!verActual)}/>}/>
+          <TextInput value={passForm.actual} onChangeText={setPass('actual')}
+              style={[styles.input, styles.inputNativo]} placeholder="" placeholderTextColor="#aaa"/>}/>
 
           <Text style={styles.inputLabel}>Contraseña nueva</Text>
-          <TextInput value={passForm.nueva} onChangeText={setPass('nueva')} mode="outlined"
-            style={styles.input} secureTextEntry={!verNueva} activeOutlineColor="#2E7D32"
-            outlineColor="#ddd" theme={{ roundness: 10 }}
-            right={<TextInput.Icon icon={verNueva ? 'eye-off' : 'eye'} onPress={() => setVerNueva(!verNueva)}/>}/>
+          <TextInput value={passForm.nueva} onChangeText={setPass('nueva')}
+              style={[styles.input, styles.inputNativo]} placeholder="" placeholderTextColor="#aaa"/>}/>
 
           <Text style={styles.inputLabel}>Confirmar contraseña nueva</Text>
-          <TextInput value={passForm.confirmar} onChangeText={setPass('confirmar')} mode="outlined"
-            style={styles.input} secureTextEntry={!verConfirmar} activeOutlineColor="#2E7D32"
-            outlineColor="#ddd" theme={{ roundness: 10 }}
-            right={<TextInput.Icon icon={verConfirmar ? 'eye-off' : 'eye'} onPress={() => setVerConfirmar(!verConfirmar)}/>}/>
+          <TextInput value={passForm.confirmar} onChangeText={setPass('confirmar')}
+              style={[styles.input, styles.inputNativo]} placeholder="" placeholderTextColor="#aaa"/>}/>
 
           {!!passError && <View style={styles.errorBox}><Text style={styles.errorTexto}>{passError}</Text></View>}
           {!!passOk    && <View style={styles.okBox}><Text style={styles.okTexto}>{passOk}</Text></View>}

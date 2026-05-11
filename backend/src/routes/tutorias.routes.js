@@ -631,10 +631,11 @@ router.get('/docente/reporte/:id_tutoria', verifyToken, async (req, res) => {
       `SELECT ta.id AS id_tutoria_alumno,
               u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula,
               ta.estado, ta.puntaje_total, ta.nivel_riesgo, ta.fecha_respuesta,
-              ct.folio AS folio_constancia
+              ct.folio_constancia
        FROM tutorias_alumnos ta
        JOIN usuarios u ON ta.id_alumno = u.id_usuario
-       LEFT JOIN constancias_tutoria ct ON ct.id_tutoria_alumno = ta.id
+       LEFT JOIN constancias_tutoria ct
+         ON ct.id_tutoria = ta.id_tutoria AND ct.id_alumno = ta.id_alumno
        WHERE ta.id_tutoria = ?
        ORDER BY u.apellido_paterno, u.nombre`,
       [req.params.id_tutoria]
