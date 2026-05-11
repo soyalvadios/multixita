@@ -399,6 +399,89 @@ app.get('/api/oficial/historial', verifyToken, async (req, res) => {
 });
 
 // ── Health check ──────────────────────────────────────────
+// ── ALUMNO: mis vehículos ─────────────────────────────────
+app.get('/api/alumnos/mis-vehiculos', verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT id_vehiculo, placas, marca, modelo, color, tipo, activo
+       FROM vehiculos WHERE id_usuario = ? ORDER BY id_vehiculo DESC`,
+      [req.usuario.id_usuario]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── ALUMNO: registrar vehículo ────────────────────────────
+app.post('/api/alumnos/vehiculos', verifyToken, async (req, res) => {
+  const { placas, marca, modelo, color, tipo } = req.body;
+  if (!placas || !color) return res.status(400).json({ error: 'Placas y color son obligatorios' });
+  const tipoVal = ['auto','moto','otro'].includes(tipo) ? tipo : 'auto';
+  try {
+    const [existe] = await db.query('SELECT id_vehiculo FROM vehiculos WHERE placas = ?', [placas.trim().toUpperCase()]);
+    if (existe.length) return res.status(409).json({ error: 'Esas placas ya están registradas' });
+    const [r] = await db.query(
+      `INSERT INTO vehiculos (id_usuario, placas, marca, modelo, color, tipo)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.usuario.id_usuario, placas.trim().toUpperCase(), marca||null, modelo||null, color.trim(), tipoVal]
+    );
+    res.status(201).json({ mensaje: 'Vehículo registrado', id_vehiculo: r.insertId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── ALUMNO: editar vehículo ───────────────────────────────
+app.patch('/api/alumnos/vehiculos/:id', verifyToken, async (req, res) => {
+  const { placas, marca, modelo, color, tipo } = req.body;
+  const tipoVal = ['auto','moto','otro'].includes(tipo) ? tipo : 'auto';
+  try {
+    const [dueño] = await db.query(
+      'SELECT id_vehiculo FROM vehiculos WHERE id_vehiculo = ? AND id_usuario = ?',
+      [req.params.id, req.usuario.id_usuario]
+    );
+    if (!dueño.length) return res.status(404).json({ error: 'Vehículo no encontrado' });
+    await db.query(
+      `UPDATE vehiculos SET placas=?, marca=?, modelo=?, color=?, tipo=? WHERE id_vehiculo=?`,
+      [placas?.trim().toUpperCase(), marca||null, modelo||null, color?.trim(), tipoVal, req.params.id]
+    );
+    res.json({ mensaje: 'Vehículo actualizado' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── ALUMNO: mi foto de perfil ─────────────────────────────
+app.get('/api/alumnos/mi-foto', verifyToken, async (req, res) => {
+  try {
+    const [[u]] = await db.query(
+      'SELECT foto, foto_selfie FROM usuarios WHERE id_usuario = ?',
+      [req.usuario.id_usuario]
+    );
+    res.json({ foto: u?.foto || null, foto_selfie: u?.foto_selfie || null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── ALUMNO: subir foto de perfil ──────────────────────────
+app.post('/api/alumnos/foto', verifyToken, upload.single('foto'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Sin archivo' });
+  const ruta = `/uploads/fotos/${req.file.filename}`;
+  try {
+    await db.query('UPDATE usuarios SET foto = ? WHERE id_usuario = ?', [ruta, req.usuario.id_usuario]);
+    res.json({ ruta });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── ALUMNO: cambiar contraseña ────────────────────────────
+app.post('/api/alumnos/cambiar-password', verifyToken, async (req, res) => {
+  const { password_actual, password_nueva } = req.body;
+  if (!password_actual || !password_nueva) return res.status(400).json({ error: 'Faltan campos' });
+  if (password_nueva.length < 6) return res.status(400).json({ error: 'Mínimo 6 caracteres' });
+  try {
+    const [[u]] = await db.query('SELECT password FROM usuarios WHERE id_usuario = ?', [req.usuario.id_usuario]);
+    const ok = await bcrypt.compare(password_actual, u.password);
+    if (!ok) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+    const hash = await bcrypt.hash(password_nueva, 12);
+    await db.query('UPDATE usuarios SET password = ? WHERE id_usuario = ?', [hash, req.usuario.id_usuario]);
+    res.json({ mensaje: 'Contraseña actualizada' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', version: '1.0.0', ts: new Date().toISOString() });
 });
