@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, FlatList, RefreshControl,
-  SafeAreaView, StyleSheet, Text, TouchableOpacity, View,
+  SafeAreaView, Share, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { getDetalleTutoria, cerrarTutoria, publicarTutoriaBorrador } from '../services/api';
+import { getDetalleTutoria, cerrarTutoria, publicarTutoriaBorrador, getReporteTutoria } from '../services/api';
 
 const GREEN = '#2E7D32';
 const SEM   = {
@@ -20,6 +20,9 @@ export default function DocenteTutoriaDetalle({ route, navigation }) {
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [accionando, setAccionando] = useState(false);
+  const [tabActivo,  setTabActivo]  = useState('alumnos'); // 'alumnos' | 'constancias'
+  const [reporte,    setReporte]    = useState(null);
+  const [loadingRep, setLoadingRep] = useState(false);
 
   const cargar = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -31,6 +34,52 @@ export default function DocenteTutoriaDetalle({ route, navigation }) {
   }, [token, id]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  const cargarReporte = useCallback(async () => {
+    setLoadingRep(true);
+    try {
+      const r = await getReporteTutoria(token, id, handleTokenExpired);
+      setReporte(r);
+    } catch (e) { Alert.alert('Error', e.message); }
+    finally { setLoadingRep(false); }
+  }, [token, id]);
+
+  const compartirReporte = async () => {
+    if (!reporte) return;
+    const { tutoria: t, estadisticas: e, alumnos } = reporte;
+    const SEM_LABEL = { verde: '🟢 Sin riesgo', amarillo: '🟡 Seguimiento', rojo: '🔴 Riesgo alto' };
+    const lineas = [
+      `📋 REPORTE DE TUTORÍA`,
+      `Folio: ${t.folio}`,
+      `Materia: ${t.materia} (${t.clave_materia})`,
+      `Grupo: ${t.grupo} · Parcial ${t.parcial}`,
+      `Periodo: ${t.periodo}`,
+      `Docente: ${t.docente}`,
+      `Estado: ${t.estatus}`,
+      ``,
+      `📊 ESTADÍSTICAS`,
+      `Total alumnos: ${e.total}`,
+      `Respondidas: ${e.respondidas} (${e.total ? Math.round((e.respondidas/e.total)*100) : 0}%)`,
+      `Pendientes: ${e.pendientes}`,
+      e.promedio != null ? `Promedio efectividad: ${e.promedio}%` : null,
+      e.por_nivel?.verde    ? `🟢 Sin riesgo: ${e.por_nivel.verde}` : null,
+      e.por_nivel?.amarillo ? `🟡 Seguimiento: ${e.por_nivel.amarillo}` : null,
+      e.por_nivel?.rojo     ? `🔴 Riesgo alto: ${e.por_nivel.rojo}` : null,
+      ``,
+      `👥 DETALLE POR ALUMNO`,
+      ...alumnos.map(a =>
+        `• ${a.apellido_paterno} ${a.nombre} (${a.matricula}): ` +
+        (a.estado === 'respondida'
+          ? `${a.puntaje_total}% — ${SEM_LABEL[a.nivel_riesgo] || a.nivel_riesgo}` +
+            (a.folio_constancia ? ` | Constancia: ${a.folio_constancia}` : '')
+          : 'Pendiente')
+      ),
+    ].filter(Boolean).join('\n');
+
+    try {
+      await Share.share({ message: lineas, title: `Reporte ${t.folio}` });
+    } catch (e) { Alert.alert('Error', e.message); }
+  };
 
   const accion = async (tipo) => {
     Alert.alert(
@@ -142,10 +191,109 @@ export default function DocenteTutoriaDetalle({ route, navigation }) {
               )}
             </View>
 
-            <Text style={s.seccion}>Alumnos del grupo</Text>
+            {/* Tabs */}
+            <View style={s.tabsRow}>
+              <TouchableOpacity
+                style={[s.tabBtn, tabActivo === 'alumnos' && s.tabBtnActivo]}
+                onPress={() => setTabActivo('alumnos')}>
+                <Text style={[s.tabBtnTxt, tabActivo === 'alumnos' && s.tabBtnTxtActivo]}>
+                  👥 Alumnos
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.tabBtn, tabActivo === 'constancias' && s.tabBtnActivo]}
+                onPress={() => {
+                  setTabActivo('constancias');
+                  if (!reporte) cargarReporte();
+                }}>
+                <Text style={[s.tabBtnTxt, tabActivo === 'constancias' && s.tabBtnTxtActivo]}>
+                  📄 Constancias y reporte
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {tabActivo === 'constancias' && (
+              <View style={s.reporteContainer}>
+                {loadingRep ? (
+                  <ActivityIndicator color={GREEN} style={{ marginTop: 24 }} />
+                ) : reporte ? (
+                  <>
+                    {/* Botón compartir reporte */}
+                    <TouchableOpacity style={s.btnReporte} onPress={compartirReporte}>
+                      <Text style={s.btnReporteTxt}>📤 Compartir reporte completo</Text>
+                    </TouchableOpacity>
+
+                    {/* Estadísticas */}
+                    <View style={s.repEstadCard}>
+                      <Text style={s.repSeccion}>ESTADÍSTICAS</Text>
+                      <View style={s.repFila}>
+                        <View style={s.repStat}>
+                          <Text style={s.repStatNum}>{reporte.estadisticas.total}</Text>
+                          <Text style={s.repStatLbl}>Total</Text>
+                        </View>
+                        <View style={s.repStat}>
+                          <Text style={[s.repStatNum, { color: GREEN }]}>{reporte.estadisticas.respondidas}</Text>
+                          <Text style={s.repStatLbl}>Respondidas</Text>
+                        </View>
+                        <View style={s.repStat}>
+                          <Text style={[s.repStatNum, { color: '#F57F17' }]}>{reporte.estadisticas.pendientes}</Text>
+                          <Text style={s.repStatLbl}>Pendientes</Text>
+                        </View>
+                        {reporte.estadisticas.promedio != null && (
+                          <View style={s.repStat}>
+                            <Text style={[s.repStatNum, { color: '#1565C0' }]}>{reporte.estadisticas.promedio}%</Text>
+                            <Text style={s.repStatLbl}>Promedio</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Lista de constancias por alumno */}
+                    <Text style={s.repSeccion}>CONSTANCIAS POR ALUMNO</Text>
+                    {reporte.alumnos.map((a, i) => {
+                      const sem = a.nivel_riesgo ? SEM[a.nivel_riesgo] : null;
+                      return (
+                        <View key={i} style={[s.constanciaCard, sem && { borderLeftColor: sem.color, borderLeftWidth: 3 }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.constanciaNombre}>
+                              {a.apellido_paterno} {a.apellido_materno} {a.nombre}
+                            </Text>
+                            <Text style={s.constanciaMat}>{a.matricula}</Text>
+                            {a.estado === 'respondida' && sem && (
+                              <Text style={[s.constanciaRiesgo, { color: sem.color }]}>
+                                {sem.e} {a.puntaje_total}% — {sem.label}
+                              </Text>
+                            )}
+                            {a.folio_constancia ? (
+                              <Text style={s.constanciaFolio}>📄 {a.folio_constancia}</Text>
+                            ) : (
+                              <Text style={s.constanciaSinFolio}>
+                                {a.estado === 'respondida' ? 'Constancia en proceso' : 'Sin respuesta aún'}
+                              </Text>
+                            )}
+                          </View>
+                          <View style={[s.estadoBadge, a.estado === 'respondida' ? s.estadoBadgeResp : s.estadoBadgePend]}>
+                            <Text style={[s.estadoBadgeTxt, { color: a.estado === 'respondida' ? GREEN : '#888' }]}>
+                              {a.estado === 'respondida' ? '✓' : '…'}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <TouchableOpacity style={s.btnReporte} onPress={cargarReporte}>
+                    <Text style={s.btnReporteTxt}>Cargar reporte</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {tabActivo === 'alumnos' && <Text style={s.seccion}>Alumnos del grupo</Text>}
           </>
         )}
         renderItem={({ item }) => {
+          if (tabActivo !== 'alumnos') return null;
           const resp   = item.estado === 'respondida';
           const sem    = item.nivel_riesgo ? SEM[item.nivel_riesgo] : null;
           const inicial = (item.nombre || '?').charAt(0).toUpperCase();
@@ -220,6 +368,32 @@ const s = StyleSheet.create({
   estadoBadgeResp:{ backgroundColor: '#E8F5E9' },
   estadoBadgePend:{ backgroundColor: '#f5f5f5' },
   estadoBadgeTxt: { fontSize: 11, fontWeight: '600' },
-  vacioBox:     { alignItems: 'center', paddingTop: 40 },
-  vacioTxt:     { color: '#aaa', fontSize: 14 },
+  tabsRow:       { flexDirection: 'row', marginHorizontal: 16, marginBottom: 4, gap: 8 },
+  tabBtn:        { flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: '#ddd',
+                   backgroundColor: '#fff', alignItems: 'center' },
+  tabBtnActivo:  { borderColor: GREEN, backgroundColor: '#F1F8E9' },
+  tabBtnTxt:     { fontSize: 12, color: '#888', fontWeight: '600' },
+  tabBtnTxtActivo:{ color: GREEN, fontWeight: '700' },
+  reporteContainer:{ paddingHorizontal: 16, paddingBottom: 24 },
+  btnReporte:    { backgroundColor: GREEN, borderRadius: 12, paddingVertical: 13,
+                   alignItems: 'center', marginBottom: 16 },
+  btnReporteTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  repEstadCard:  { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 14,
+                   borderWidth: 0.5, borderColor: '#e0e0e0' },
+  repFila:       { flexDirection: 'row', justifyContent: 'space-around', marginTop: 8 },
+  repStat:       { alignItems: 'center' },
+  repStatNum:    { fontSize: 22, fontWeight: '800', color: '#333' },
+  repStatLbl:    { fontSize: 11, color: '#888', marginTop: 2 },
+  repSeccion:    { fontSize: 11, fontWeight: '700', color: '#558B2F', textTransform: 'uppercase',
+                   letterSpacing: 0.5, marginBottom: 8, marginTop: 4 },
+  constanciaCard:{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8,
+                   flexDirection: 'row', alignItems: 'center', gap: 10,
+                   borderWidth: 0.5, borderColor: '#e0e0e0' },
+  constanciaNombre:{ fontSize: 13, fontWeight: '700', color: '#333' },
+  constanciaMat: { fontSize: 11, color: '#888', marginTop: 1 },
+  constanciaRiesgo:{ fontSize: 12, fontWeight: '600', marginTop: 3 },
+  constanciaFolio: { fontSize: 11, color: '#1565C0', marginTop: 3, fontWeight: '600' },
+  constanciaSinFolio:{ fontSize: 11, color: '#aaa', marginTop: 3 },
+  vacioBox:      { alignItems: 'center', paddingTop: 40 },
+  vacioTxt:      { color: '#aaa', fontSize: 14 },
 });

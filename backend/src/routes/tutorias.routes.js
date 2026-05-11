@@ -195,7 +195,7 @@ router.get('/docente/mis-tutorias', verifyToken, async (req, res) => {
 // POST /api/tutorias/docente/crear
 router.post('/docente/crear', verifyToken, async (req, res) => {
   if (req.usuario.rol !== 'docente') return res.status(403).json({ error: 'Sin permisos' });
-  const { id_asignacion, parcial, titulo, motivo, instrucciones, preguntas, estatus } = req.body;
+  const { id_asignacion, parcial, titulo, motivo, instrucciones, preguntas, estatus, alumnos_seleccionados } = req.body;
 
   if (!id_asignacion || !titulo)
     return res.status(400).json({ error: 'Faltan: id_asignacion, titulo' });
@@ -243,16 +243,29 @@ router.post('/docente/crear', verifyToken, async (req, res) => {
       }
     }
 
-    // Publicar a alumnos del grupo si no es borrador
+    // Publicar a alumnos seleccionados o a todo el grupo si no es borrador
     let alumnos_notificados = 0;
     if (estatusFinal === 'publicada') {
-      const [alumnos] = await db.query(
-        `SELECT ag.id_alumno FROM alumnos_grupos ag WHERE ag.id_grupo = ?`,
-        [asig.id_grupo]
-      );
-      alumnos_notificados = alumnos.length;
-      if (alumnos.length > 0) {
-        const vals = alumnos.map(a => [id_tutoria, a.id_alumno]);
+      let destinatarios;
+      if (Array.isArray(alumnos_seleccionados) && alumnos_seleccionados.length > 0) {
+        // Solo los alumnos seleccionados por el docente (validados contra el grupo)
+        const [validados] = await db.query(
+          `SELECT ag.id_alumno FROM alumnos_grupos ag
+           WHERE ag.id_grupo = ? AND ag.id_alumno IN (?)`,
+          [asig.id_grupo, alumnos_seleccionados]
+        );
+        destinatarios = validados.map(a => a.id_alumno);
+      } else {
+        // Sin selección → publicar a todo el grupo (comportamiento original)
+        const [todos] = await db.query(
+          `SELECT ag.id_alumno FROM alumnos_grupos ag WHERE ag.id_grupo = ?`,
+          [asig.id_grupo]
+        );
+        destinatarios = todos.map(a => a.id_alumno);
+      }
+      alumnos_notificados = destinatarios.length;
+      if (destinatarios.length > 0) {
+        const vals = destinatarios.map(id => [id_tutoria, id]);
         await db.query(`INSERT IGNORE INTO tutorias_alumnos (id_tutoria, id_alumno) VALUES ?`, [vals]);
       }
     }
@@ -502,246 +515,152 @@ router.get('/alumno/constancia/:folio', verifyToken, async (req, res) => {
 });
 // ─────────────────────────────────────────────────────────────
 // AGREGAR ESTE BLOQUE AL FINAL DE tutorias.routes.js
-// JUSTO ANTES de module.exports = router;
-//
-// INSTALAR PRIMERO EN /backend:
-//   npm install pdf2json
-// ─────────────────────────────────────────────────────────────
+// JUSTO ANTES de // ═══════════════════════════════════════════════════════════════════════════
+// NUEVOS ENDPOINTS — pegar en tutorias.routes.js ANTES de module.exports
+// ═══════════════════════════════════════════════════════════════════════════
 
-const multerActas = require('multer');
-const pathActas   = require('path');
-const fsActas     = require('fs');
-const PDFParser   = require('pdf2json');
-
-// Multer: guarda el PDF temporalmente
-const storageActas = multerActas.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = pathActas.join(__dirname, '../../uploads/actas');
-    fsActas.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `acta_${Date.now()}.pdf`);
-  },
-});
-const uploadActa = multerActas({
-  storage: storageActas,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Solo se aceptan archivos PDF'));
-    }
-  },
-});
-
-// Extrae texto del PDF usando pdf2json (funciona en Windows y Linux)
-function extraerTextoPDF(rutaPDF) {
-  return new Promise((resolve, reject) => {
-    const parser = new PDFParser();
-    parser.on('pdfParser_dataReady', data => {
-      try {
-        const texto = data.Pages
-          .map(pg => pg.Texts.map(t => decodeURIComponent(t.R.map(r => r.T).join(''))).join(' '))
-          .join('\n');
-        resolve(texto);
-      } catch (e) {
-        reject(new Error('Error procesando contenido del PDF: ' + e.message));
-      }
-    });
-    parser.on('pdfParser_dataError', err => {
-      reject(new Error('Error leyendo el PDF: ' + (err?.parserError || err)));
-    });
-    parser.loadPDF(rutaPDF);
-  });
-}
-
-// Parser del texto extraído del acta SIDIUMB
-function parsearActa(texto) {
-  const resultado = {
-    parcial:  null,
-    clave:    null,
-    grupo:    null,
-    fecha:    null,
-    alumnos:  [],
-  };
-
-  // Parcial: pdf2json coloca el número ANTES del texto "ACTA INTERNA PARCIAL"
-  // Formato: "No. MATRÍCULA 1 ACTA INTERNA PARCIAL ..."
-  const mParcialA = texto.match(/\b(\d+)\s+ACTA\s+INTERNA\s+PARCIAL\b/i);
-  const mParcialD = texto.match(/ACTA\s+INTERNA\s+PARCIAL\s+(\d+)/i);
-  if (mParcialA) resultado.parcial = parseInt(mParcialA[1]);
-  else if (mParcialD) resultado.parcial = parseInt(mParcialD[1]);
-
-  // Clave de asignatura: buscar antes de "CLAVE ASIGNATURA" (formato pdf2json)
-  // o después según variantes del PDF
-  const mClaveA = texto.match(/([A-Z]{2,4}\d{4})\s+CLAVE\s+ASIGNATURA/i);
-  const mClaveD = texto.match(/CLAVE\s+ASIGNATURA\s+([A-Z]{2,4}\d{4})/i);
-  const mClaveG = texto.match(/\b([A-Z]{3}\d{4})\b/);
-  if (mClaveA) resultado.clave = mClaveA[1].trim();
-  else if (mClaveD) resultado.clave = mClaveD[1].trim();
-  else if (mClaveG) resultado.clave = mClaveG[1].trim();
-
-  // Grupo: buscar después de "GRUPO:" (más confiable)
-  const mGrupoG = texto.match(/GRUPO:\s*([0-9]{2}[A-Z]{2,3}[0-9]{3})\b/i);
-  if (mGrupoG) resultado.grupo = mGrupoG[1].trim();
-
-  // Fecha: cualquier DD/MM/YYYY en el texto
-  const mFecha = texto.match(/(\d{2}\/\d{2}\/\d{4})/);
-  if (mFecha) {
-    const [d, m, a] = mFecha[1].split('/');
-    resultado.fecha = `${a}-${m}-${d}`; // formato MySQL
-  }
-
-  // Alumnos: matrícula de 8 dígitos seguida de asistencias (NN/NN) y calificación (número)
-  // El texto de pdf2json tiene el formato: "1 26230013 ALVARADO CORREA DAVID 25/25 80"
-  const reAlumno = /\b(\d{8})\b[^]*?(\d+\/\d+)\s+(\d{1,3})\b/g;
-  let m;
-  while ((m = reAlumno.exec(texto)) !== null) {
-    const cal = parseInt(m[3]);
-    if (cal >= 0 && cal <= 100) {
-      resultado.alumnos.push({
-        matricula:    m[1],
-        asistencias:  m[2],
-        calificacion: cal,
-      });
-    }
-  }
-
-  return resultado;
-}
-
-// POST /api/tutorias/docente/subir-acta
-router.post('/docente/subir-acta', verifyToken, uploadActa.single('acta'), async (req, res) => {
-  const rolesPermitidos = ['docente', 'administrador', 'coordinador'];
-  if (!rolesPermitidos.includes(req.usuario.rol)) {
+// GET /api/tutorias/docente/grupo/:id_grupo/alumnos
+// Devuelve alumnos del grupo para que el docente seleccione a quiénes publicar
+router.get('/docente/grupo/:id_grupo/alumnos', verifyToken, async (req, res) => {
+  if (req.usuario.rol !== 'docente')
     return res.status(403).json({ error: 'Sin permisos' });
-  }
-  if (!req.file) return res.status(400).json({ error: 'No se recibió el archivo PDF' });
-
-  const rutaPDF = req.file.path;
-
   try {
-    // 1. Extraer texto del PDF
-    const texto = await extraerTextoPDF(rutaPDF);
-
-    // 2. Parsear
-    const acta = parsearActa(texto);
-
-    if (!acta.parcial || !acta.clave || !acta.grupo) {
-      return res.status(422).json({
-        error: 'No se pudo identificar parcial, clave de asignatura o grupo en el PDF.',
-        debug: { parcial: acta.parcial, clave: acta.clave, grupo: acta.grupo },
-      });
-    }
-
-    if (acta.alumnos.length === 0) {
-      return res.status(422).json({ error: 'No se encontraron calificaciones en el PDF.' });
-    }
-
-    // 3. Resolver id_asignacion desde clave + grupo + docente
-    const idDocente = req.usuario.id_usuario;
-
-    const [[materia]] = await db.query(
-      'SELECT id FROM materias WHERE clave = ?',
-      [acta.clave]
+    const [alumnos] = await db.query(
+      `SELECT u.id_usuario, u.nombre, u.apellido_paterno, u.apellido_materno,
+              u.matricula, u.foto_selfie
+       FROM alumnos_grupos ag
+       JOIN usuarios u ON ag.id_alumno = u.id_usuario
+       WHERE ag.id_grupo = ?
+       ORDER BY u.apellido_paterno, u.nombre`,
+      [req.params.id_grupo]
     );
-    if (!materia) {
-      return res.status(404).json({
-        error: `Materia con clave "${acta.clave}" no encontrada en la base de datos.`,
-      });
-    }
-
-    const [[grupo]] = await db.query(
-      'SELECT id FROM grupos WHERE nombre = ?',
-      [acta.grupo]
-    );
-    if (!grupo) {
-      return res.status(404).json({
-        error: `Grupo "${acta.grupo}" no encontrado en la base de datos.`,
-      });
-    }
-
-    // Admin/coordinador puede subir cualquier acta; docente solo las suyas
-    const esDocente = req.usuario.rol === 'docente';
-    const [asigRows] = await db.query(
-      esDocente
-        ? 'SELECT id FROM asignaciones WHERE id_docente=? AND id_materia=? AND id_grupo=? LIMIT 1'
-        : 'SELECT id FROM asignaciones WHERE id_materia=? AND id_grupo=? LIMIT 1',
-      esDocente ? [idDocente, materia.id, grupo.id] : [materia.id, grupo.id]
-    );
-    if (!asigRows.length) {
-      return res.status(404).json({
-        error: `No se encontró asignación para "${acta.clave}" en grupo "${acta.grupo}"${esDocente ? ' para este docente' : ''}.`,
-      });
-    }
-    const idAsignacion = asigRows[0].id;
-    const fechaCaptura = acta.fecha || new Date().toISOString().slice(0, 10);
-
-    // 4. Procesar cada alumno
-    const actualizados = [];
-    const errores      = [];
-
-    for (const a of acta.alumnos) {
-      const [[alumno]] = await db.query(
-        'SELECT id_usuario FROM usuarios WHERE matricula = ? AND rol = "alumno"',
-        [a.matricula]
-      );
-
-      if (!alumno) {
-        errores.push({ matricula: a.matricula, motivo: 'Matrícula no encontrada en el sistema' });
-        continue;
-      }
-
-      try {
-        await db.query(
-          `INSERT INTO calificaciones
-             (id_alumno, id_asignacion, parcial, calificacion, asistencias, fecha_captura)
-           VALUES (?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE
-             calificacion  = VALUES(calificacion),
-             asistencias   = VALUES(asistencias),
-             fecha_captura = VALUES(fecha_captura)`,
-          [alumno.id_usuario, idAsignacion, acta.parcial, a.calificacion, a.asistencias, fechaCaptura]
-        );
-        actualizados.push({ matricula: a.matricula, calificacion: a.calificacion, asistencias: a.asistencias });
-      } catch (err) {
-        errores.push({ matricula: a.matricula, motivo: err.message });
-      }
-    }
-
-    // 5. Registrar acta en actas_pdf
-    await db.query(
-      `INSERT INTO actas_pdf (id_asignacion, parcial, ruta_pdf, procesada, alumnos_procesados)
-       VALUES (?, ?, ?, 1, ?)
-       ON DUPLICATE KEY UPDATE
-         ruta_pdf           = VALUES(ruta_pdf),
-         fecha_subida       = NOW(),
-         procesada          = 1,
-         alumnos_procesados = VALUES(alumnos_procesados)`,
-      [idAsignacion, acta.parcial, `/uploads/actas/${req.file.filename}`, actualizados.length]
-    ).catch(() => {});
-
-    res.json({
-      ok: true,
-      resumen: {
-        materia:      acta.clave,
-        grupo:        acta.grupo,
-        parcial:      acta.parcial,
-        fecha:        fechaCaptura,
-        actualizados: actualizados.length,
-        errores:      errores.length,
-      },
-      actualizados,
-      errores,
-    });
-
+    res.json(alumnos);
   } catch (err) {
-    console.error('Error subir-acta:', err);
+    console.error('Error alumnos grupo:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+// PATCH /api/tutorias/docente/publicar-seleccion/:id
+// Publica una tutoría borrador solo para alumnos seleccionados
+// Body: { alumnos_ids: [id1, id2, ...] }  — si vacío, publica a todo el grupo
+router.patch('/docente/publicar-seleccion/:id', verifyToken, async (req, res) => {
+  if (req.usuario.rol !== 'docente')
+    return res.status(403).json({ error: 'Sin permisos' });
+
+  const { alumnos_ids } = req.body; // array de id_usuario
+  try {
+    const [[tut]] = await db.query(
+      `SELECT t.id, t.estatus, a.id_grupo
+       FROM tutorias t
+       JOIN asignaciones a ON t.id_asignacion = a.id
+       WHERE t.id = ? AND t.id_docente = ?`,
+      [req.params.id, req.usuario.id_usuario]
+    );
+    if (!tut) return res.status(404).json({ error: 'Tutoría no encontrada o sin permisos' });
+
+    // Determinar alumnos destino
+    let destinatarios;
+    if (Array.isArray(alumnos_ids) && alumnos_ids.length > 0) {
+      // Solo los seleccionados (verificar que pertenecen al grupo)
+      const [validados] = await db.query(
+        `SELECT ag.id_alumno
+         FROM alumnos_grupos ag
+         WHERE ag.id_grupo = ? AND ag.id_alumno IN (?)`,
+        [tut.id_grupo, alumnos_ids]
+      );
+      destinatarios = validados.map(a => a.id_alumno);
+    } else {
+      // Todo el grupo
+      const [todos] = await db.query(
+        `SELECT ag.id_alumno FROM alumnos_grupos ag WHERE ag.id_grupo = ?`,
+        [tut.id_grupo]
+      );
+      destinatarios = todos.map(a => a.id_alumno);
+    }
+
+    if (destinatarios.length === 0)
+      return res.status(400).json({ error: 'No hay alumnos válidos para publicar' });
+
+    // Insertar en tutorias_alumnos (IGNORE para no duplicar)
+    const vals = destinatarios.map(id => [tut.id, id]);
+    await db.query(
+      `INSERT IGNORE INTO tutorias_alumnos (id_tutoria, id_alumno) VALUES ?`,
+      [vals]
+    );
+
+    // Marcar tutoría como publicada
+    await db.query(
+      `UPDATE tutorias SET estatus = 'publicada' WHERE id = ?`,
+      [tut.id]
+    );
+
+    res.json({ mensaje: 'Tutoría publicada', alumnos_notificados: destinatarios.length });
+  } catch (err) {
+    console.error('Error publicar selección:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/tutorias/docente/reporte/:id_tutoria
+// Reporte completo de una tutoría: alumnos, respuestas, puntajes y constancias
+router.get('/docente/reporte/:id_tutoria', verifyToken, async (req, res) => {
+  if (req.usuario.rol !== 'docente')
+    return res.status(403).json({ error: 'Sin permisos' });
+  try {
+    // Verificar que la tutoría pertenece al docente
+    const [[tut]] = await db.query(
+      `SELECT t.id, t.folio, t.titulo, t.parcial, t.estatus,
+              m.nombre AS materia, m.clave AS clave_materia,
+              g.nombre AS grupo, p.nombre AS periodo,
+              CONCAT(ud.nombre, ' ', ud.apellido_paterno) AS docente
+       FROM tutorias t
+       JOIN asignaciones a ON t.id_asignacion = a.id
+       JOIN materias  m ON a.id_materia = m.id
+       JOIN grupos    g ON a.id_grupo   = g.id
+       JOIN periodos  p ON a.id_periodo = p.id
+       JOIN usuarios ud ON t.id_docente = ud.id_usuario
+       WHERE t.id = ? AND t.id_docente = ?`,
+      [req.params.id_tutoria, req.usuario.id_usuario]
+    );
+    if (!tut) return res.status(404).json({ error: 'Tutoría no encontrada o sin permisos' });
+
+    // Alumnos con su estado, puntaje, riesgo y folio de constancia
+    const [alumnos] = await db.query(
+      `SELECT ta.id AS id_tutoria_alumno,
+              u.nombre, u.apellido_paterno, u.apellido_materno, u.matricula,
+              ta.estado, ta.puntaje_total, ta.nivel_riesgo, ta.fecha_respuesta,
+              ct.folio AS folio_constancia
+       FROM tutorias_alumnos ta
+       JOIN usuarios u ON ta.id_alumno = u.id_usuario
+       LEFT JOIN constancias_tutoria ct ON ct.id_tutoria_alumno = ta.id
+       WHERE ta.id_tutoria = ?
+       ORDER BY u.apellido_paterno, u.nombre`,
+      [req.params.id_tutoria]
+    );
+
+    // Estadísticas del reporte
+    const total       = alumnos.length;
+    const respondidas = alumnos.filter(a => a.estado === 'respondida').length;
+    const pendientes  = total - respondidas;
+    const porNivel    = alumnos.reduce((acc, a) => {
+      if (a.nivel_riesgo) acc[a.nivel_riesgo] = (acc[a.nivel_riesgo] || 0) + 1;
+      return acc;
+    }, {});
+    const promedio = respondidas > 0
+      ? Math.round(alumnos.filter(a => a.puntaje_total != null)
+          .reduce((s, a) => s + a.puntaje_total, 0) / respondidas)
+      : null;
+
+    res.json({
+      tutoria: tut,
+      estadisticas: { total, respondidas, pendientes, promedio, por_nivel: porNivel },
+      alumnos,
+    });
+  } catch (err) {
+    console.error('Error reporte:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

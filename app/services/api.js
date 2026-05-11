@@ -2,7 +2,7 @@
 // Cambia SOLO este valor:
 //   LAN:   'http://192.168.X.X:3000'
 //   ngrok: 'https://xxxx.ngrok-free.app'
-export const BASE_URL = 'https://washier-zulema-arythmically.ngrok-free.dev';
+export const BASE_URL = 'http://195.26.245.40:3001';
 
 let authToken           = null;
 let unauthorizedHandler = null;
@@ -141,6 +141,8 @@ export const getHistorialAccesos = (t, onExp) =>
 // ── Tutorías ───────────────────────────────────────────────
 export const getMisAsignacionesDocente = (t, onExp) =>
   fetchAuth('/api/tutorias/docente/asignaciones', {}, t, onExp);
+export const getAlumnosGrupo = (t, id_grupo, onExp) =>
+  fetchAuth(`/api/tutorias/docente/grupo/${id_grupo}/alumnos`, {}, t, onExp);
 export const getMisTutoriasDocente = (t, onExp) =>
   fetchAuth('/api/tutorias/docente/mis-tutorias', {}, t, onExp);
 export const crearTutoria = (t, datos, onExp) =>
@@ -148,10 +150,15 @@ export const crearTutoria = (t, datos, onExp) =>
     { method: 'POST', body: JSON.stringify(datos) }, t, onExp);
 export const publicarTutoriaBorrador = (t, id, onExp) =>
   fetchAuth(`/api/tutorias/docente/publicar/${id}`, { method: 'PATCH' }, t, onExp);
+export const publicarTutoriaSeleccion = (t, id, alumnos_ids, onExp) =>
+  fetchAuth(`/api/tutorias/docente/publicar-seleccion/${id}`,
+    { method: 'PATCH', body: JSON.stringify({ alumnos_ids }) }, t, onExp);
 export const cerrarTutoria = (t, id, onExp) =>
   fetchAuth(`/api/tutorias/docente/cerrar/${id}`, { method: 'PATCH' }, t, onExp);
 export const getDetalleTutoria = (t, id, onExp) =>
   fetchAuth(`/api/tutorias/detalle/${id}`, {}, t, onExp);
+export const getReporteTutoria = (t, id, onExp) =>
+  fetchAuth(`/api/tutorias/docente/reporte/${id}`, {}, t, onExp);
 export const getMisTutoriasAlumno = (t, onExp) =>
   fetchAuth('/api/tutorias/alumno/mis-tutorias', {}, t, onExp);
 export const getCuestionario = (t, id_ta, onExp) =>
