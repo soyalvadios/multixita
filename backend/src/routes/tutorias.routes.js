@@ -139,6 +139,7 @@ router.get('/docente/asignaciones', verifyToken, async (req, res) => {
     const [rows] = await db.query(
       `SELECT
          a.id AS id_asignacion,
+         a.id_grupo,
          m.nombre  AS materia, m.clave AS clave_materia,
          g.nombre  AS grupo, p.nombre AS periodo, p.id AS id_periodo,
          (SELECT COUNT(*) FROM tutorias t
