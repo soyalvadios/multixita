@@ -2,7 +2,7 @@
 // Cambia SOLO este valor:
 //   LAN:   'http://192.168.X.X:3000'
 //   ngrok: 'https://xxxx.ngrok-free.app'
-export const BASE_URL = 'http://195.26.245.40:3001';
+export const BASE_URL = 'https://washier-zulema-arythmically.ngrok-free.dev';
 
 let authToken           = null;
 let unauthorizedHandler = null;
@@ -168,5 +168,40 @@ export const responderCuestionario = (t, id_ta, respuestas, onExp) =>
     { method: 'POST', body: JSON.stringify({ respuestas }) }, t, onExp);
 export const getConstancia = (t, folio, onExp) =>
   fetchAuth(`/api/tutorias/alumno/constancia/${folio}`, {}, t, onExp);
-export const getResumenTutoriasAdmin = (t, onExp) =>
-  fetchAuth('/api/tutorias/admin/resumen', {}, t, onExp);
+// ── Perfil del alumno ──────────────────────────────────────
+export const misVehiculos = (t, onExp) =>
+  fetchAuth('/api/alumnos/mis-vehiculos', {}, t, onExp);
+
+export const registrarVehiculo = (t, datos, onExp) =>
+  fetchAuth('/api/alumnos/vehiculos',
+    { method: 'POST', body: JSON.stringify(datos) }, t, onExp);
+
+export const editarVehiculo = (t, id, datos, onExp) =>
+  fetchAuth(`/api/alumnos/vehiculos/${id}`,
+    { method: 'PATCH', body: JSON.stringify(datos) }, t, onExp);
+
+export const miFoto = (t, onExp) =>
+  fetchAuth('/api/alumnos/mi-foto', {}, t, onExp);
+
+export async function subirFoto(token, formData) {
+  const res = await fetch(buildUrl('/api/alumnos/foto'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  return data;
+}
+
+export const cambiarPassword = (t, datos, onExp) =>
+  fetchAuth('/api/alumnos/cambiar-password',
+    { method: 'POST', body: JSON.stringify(datos) }, t, onExp);
+
+export function buildFileUrl(ruta) {
+  if (!ruta) return null;
+  if (/^https?:\/\//i.test(ruta)) return ruta;
+  return `${BASE_URL.replace(/\/$/, '')}${ruta.startsWith('/') ? ruta : `/${ruta}`}`;
+}
+
+

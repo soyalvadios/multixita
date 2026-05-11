@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 
 import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '../context/AuthContext';
 import { registrarVehiculo, misVehiculos, subirFoto, miFoto, cambiarPassword, editarVehiculo, buildFileUrl } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const TIPOS = [
   { label: 'Automóvil', value: 'auto' },
@@ -35,7 +35,7 @@ function SeccionColapsable({ icono, titulo, subtitulo, children, defaultOpen = f
 }
 
 // ─── Modal de edición de vehículo ────────────────────────────────────────────
-function ModalEditarVehiculo({ vehiculo, onCerrar, onGuardado }) {
+function ModalEditarVehiculo({ vehiculo, token, onCerrar, onGuardado }) {
   const [form, setForm] = useState({
     placas: vehiculo.placas || '',
     marca:  vehiculo.marca  || '',
@@ -46,18 +46,27 @@ function ModalEditarVehiculo({ vehiculo, onCerrar, onGuardado }) {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
 
-  const set = (c) => (v) => setForm({ ...form, [c]: v });
+  const set = (c) => (v) => setForm(f => ({ ...f, [c]: v }));
 
   const guardar = async () => {
-    if (!form.placas || !form.color) { setError('Placas y color son obligatorios'); return; }
+    if (!form.placas.trim() || !form.color.trim()) {
+      setError('Placas y color son obligatorios'); return;
+    }
     setCargando(true); setError('');
     try {
-      await editarVehiculo(vehiculo.id_vehiculo, form);
+      await editarVehiculo(token, vehiculo.id_vehiculo, {
+        placas: form.placas.trim(),
+        marca:  form.marca.trim()  || null,
+        modelo: form.modelo.trim() || null,
+        color:  form.color.trim(),
+        tipo:   form.tipo,
+      });
       Alert.alert('✅ Listo', 'Vehículo actualizado correctamente');
       onGuardado();
       onCerrar();
     } catch (e) {
-      setError(e.response?.data?.mensaje || 'Error al actualizar');
+      console.error('[editarVehiculo]', e.message);
+      setError(e.message || 'Error al actualizar');
     } finally {
       setCargando(false);
     }
@@ -124,7 +133,7 @@ function ModalEditarVehiculo({ vehiculo, onCerrar, onGuardado }) {
 
 // ─── Pantalla principal ───────────────────────────────────────────────────────
 export default function PerfilScreen() {
-  const { usuario, cerrarSesion } = useAuth();
+  const { usuario, cerrarSesion, token } = useAuth();
   if (!usuario) return null;
 
   const [vehiculos, setVehiculos]         = useState([]);
@@ -146,15 +155,18 @@ export default function PerfilScreen() {
   useEffect(() => { cargar(); cargarFoto(); }, []);
 
   const cargar = async () => {
-    try { const r = await misVehiculos(); setVehiculos(r.data); } catch (e) {}
+    try {
+      const r = await misVehiculos(token);
+      setVehiculos(Array.isArray(r) ? r : []);
+    } catch (e) { console.error('[misVehiculos]', e.message); }
   };
 
   const cargarFoto = async () => {
     try {
-      const r = await miFoto();
-      const ruta = r.data.foto || r.data.foto_selfie;
+      const r = await miFoto(token);
+      const ruta = r?.foto || r?.foto_selfie;
       if (ruta) setFotoUri(buildFileUrl(ruta));
-    } catch (e) {}
+    } catch (e) { console.error('[miFoto]', e.message); }
   };
 
   const seleccionarFoto = () => {
@@ -184,25 +196,37 @@ export default function PerfilScreen() {
     setSubiendo(true);
     try {
       const formData = new FormData();
-      formData.append('foto', { uri: asset.uri, name: `foto_${usuario.id}.jpg`, type: 'image/jpeg' });
-      await subirFoto(formData);
-    } catch (e) { Alert.alert('Error', 'No se pudo subir la foto'); }
-    finally { setSubiendo(false); }
+      formData.append('foto', { uri: asset.uri, name: `foto_${usuario.id_usuario}.jpg`, type: 'image/jpeg' });
+      await subirFoto(token, formData);
+    } catch (e) {
+      console.error('[subirFoto]', e.message);
+      Alert.alert('Error', 'No se pudo subir la foto');
+    } finally { setSubiendo(false); }
   };
 
   const set     = (c) => (v) => setForm({ ...form, [c]: v });
   const setPass = (c) => (v) => setPassForm({ ...passForm, [c]: v });
 
   const agregarVehiculo = async () => {
-    if (!form.placas || !form.color) { setErrorVeh('Placas y color son obligatorios'); return; }
+    if (!form.placas.trim() || !form.color.trim()) {
+      setErrorVeh('Placas y color son obligatorios'); return;
+    }
     setCargandoVeh(true); setErrorVeh('');
     try {
-      await registrarVehiculo(form);
+      await registrarVehiculo(token, {
+        placas: form.placas.trim(),
+        marca:  form.marca.trim()  || null,
+        modelo: form.modelo.trim() || null,
+        color:  form.color.trim(),
+        tipo:   form.tipo,           // 'auto' | 'moto' | 'otro'
+      });
       setForm({ placas: '', marca: '', modelo: '', color: '', tipo: 'auto' });
       await cargar();
       Alert.alert('✅ Listo', 'Vehículo registrado correctamente');
-    } catch (e) { setErrorVeh(e.response?.data?.mensaje || 'Error al registrar'); }
-    finally { setCargandoVeh(false); }
+    } catch (e) {
+      console.error('[registrarVehiculo]', e.message);
+      setErrorVeh(e.message || 'Error al registrar');
+    } finally { setCargandoVeh(false); }
   };
 
   const handleCambiarPassword = async () => {
@@ -214,12 +238,14 @@ export default function PerfilScreen() {
     if (actual === nueva) { setPassError('La nueva contraseña debe ser diferente'); return; }
     setGuardandoPass(true);
     try {
-      await cambiarPassword({ password_actual: actual, password_nueva: nueva });
+      await cambiarPassword(token, { password_actual: actual, password_nueva: nueva });
       setPassOk('✅ Contraseña actualizada correctamente');
       setPassForm({ actual: '', nueva: '', confirmar: '' });
       setTimeout(() => setPassOk(''), 3000);
-    } catch (e) { setPassError(e.response?.data?.mensaje || 'Error al cambiar contraseña'); }
-    finally { setGuardandoPass(false); }
+    } catch (e) {
+      console.error('[cambiarPassword]', e.message);
+      setPassError(e.message || 'Error al cambiar contraseña');
+    } finally { setGuardandoPass(false); }
   };
 
   const tipoIcono = (tipo) => tipo === 'moto' ? '🏍️' : tipo === 'otro' ? '🚐' : '🚗';
@@ -231,6 +257,7 @@ export default function PerfilScreen() {
       {vehiculoEditar && (
         <ModalEditarVehiculo
           vehiculo={vehiculoEditar}
+          token={token}
           onCerrar={() => setVehEditar(null)}
           onGuardado={cargar}
         />
@@ -331,16 +358,16 @@ export default function PerfilScreen() {
         {/* 🔒 Cambiar contraseña */}
         <SeccionColapsable icono="🔒" titulo="Cambiar contraseña">
           <Text style={styles.inputLabel}>Contraseña actual</Text>
-          <TextInput value={passForm.actual} onChangeText={setPass('actual')}
-              style={[styles.input, styles.inputNativo]} placeholder="" placeholderTextColor="#aaa"/>}/>
+          <TextInput value={passForm.actual} onChangeText={setPass('actual')} secureTextEntry={!verActual}
+            style={[styles.input, styles.inputNativo]} placeholder="Contraseña actual" placeholderTextColor="#aaa"/>
 
           <Text style={styles.inputLabel}>Contraseña nueva</Text>
-          <TextInput value={passForm.nueva} onChangeText={setPass('nueva')}
-              style={[styles.input, styles.inputNativo]} placeholder="" placeholderTextColor="#aaa"/>}/>
+          <TextInput value={passForm.nueva} onChangeText={setPass('nueva')} secureTextEntry={!verNueva}
+            style={[styles.input, styles.inputNativo]} placeholder="Mínimo 6 caracteres" placeholderTextColor="#aaa"/>
 
           <Text style={styles.inputLabel}>Confirmar contraseña nueva</Text>
-          <TextInput value={passForm.confirmar} onChangeText={setPass('confirmar')}
-              style={[styles.input, styles.inputNativo]} placeholder="" placeholderTextColor="#aaa"/>}/>
+          <TextInput value={passForm.confirmar} onChangeText={setPass('confirmar')} secureTextEntry={!verConfirmar}
+            style={[styles.input, styles.inputNativo]} placeholder="Repite la contraseña nueva" placeholderTextColor="#aaa"/>
 
           {!!passError && <View style={styles.errorBox}><Text style={styles.errorTexto}>{passError}</Text></View>}
           {!!passOk    && <View style={styles.okBox}><Text style={styles.okTexto}>{passOk}</Text></View>}
@@ -412,6 +439,16 @@ const styles = StyleSheet.create({
   cuentaTitulo:     { fontSize: 13, fontWeight: '600', color: '#aaa', marginBottom: 10, marginLeft: 4 },
   cerrarBtn:        { borderWidth: 1, borderColor: '#ffcdd2', borderRadius: 14, padding: 14, alignItems: 'center', backgroundColor: '#fff9f9' },
   cerrarTexto:      { color: '#C62828', fontSize: 14, fontWeight: '500' },
+
+  inputNativo:   { borderWidth: 1, borderColor: '#ddd', borderRadius: 10,
+                   paddingHorizontal: 12, paddingVertical: 11, fontSize: 14,
+                   color: '#333', backgroundColor: '#fff' },
+  tipoRow:       { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  tipoBtn:       { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
+                   borderColor: '#ddd', backgroundColor: '#fff', alignItems: 'center' },
+  tipoBtnSel:    { borderColor: '#2E7D32', backgroundColor: '#F1F8E9' },
+  tipoBtnTxt:    { fontSize: 12, color: '#888', fontWeight: '600' },
+  tipoBtnTxtSel: { color: '#2E7D32', fontWeight: '700' },
 
   // Modal editar
   modalOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
