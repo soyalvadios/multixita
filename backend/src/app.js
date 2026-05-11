@@ -482,6 +482,44 @@ app.post('/api/alumnos/cambiar-password', verifyToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── OFICIAL: registrar vehículo para un alumno ────────────
+app.post('/api/oficial/alumno/:id_alumno/vehiculos', verifyToken, async (req, res) => {
+  const roles = ['oficial','administrador','administrativo','coordinador'];
+  if (!roles.includes(req.usuario.rol)) return res.status(403).json({ error: 'Sin permisos' });
+  const { placas, marca, modelo, color, tipo } = req.body;
+  if (!placas || !color) return res.status(400).json({ error: 'Placas y color son obligatorios' });
+  const tipoVal = ['auto','moto','otro'].includes(tipo) ? tipo : 'auto';
+  try {
+    // Verificar que el alumno exista
+    const [[alumno]] = await db.query(
+      'SELECT id_usuario FROM usuarios WHERE id_usuario = ? AND rol = "alumno"',
+      [req.params.id_alumno]
+    );
+    if (!alumno) return res.status(404).json({ error: 'Alumno no encontrado' });
+
+    const [existe] = await db.query(
+      'SELECT id_vehiculo FROM vehiculos WHERE placas = ?',
+      [placas.trim().toUpperCase()]
+    );
+    if (existe.length) return res.status(409).json({ error: 'Esas placas ya están registradas' });
+
+    const [r] = await db.query(
+      `INSERT INTO vehiculos (id_usuario, placas, marca, modelo, color, tipo)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.params.id_alumno, placas.trim().toUpperCase(), marca||null, modelo||null, color.trim(), tipoVal]
+    );
+    res.status(201).json({
+      id_vehiculo: r.insertId,
+      placas: placas.trim().toUpperCase(),
+      marca: marca||null, modelo: modelo||null,
+      color: color.trim(), tipo: tipoVal,
+    });
+  } catch (err) {
+    console.error('Error registrar vehículo oficial:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', version: '1.0.0', ts: new Date().toISOString() });
 });

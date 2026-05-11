@@ -205,3 +205,7 @@ export function buildFileUrl(ruta) {
 }
 
 
+
+export const registrarVehiculoOficial = (t, id_alumno, datos, onExp) =>
+  fetchAuth(`/api/oficial/alumno/${id_alumno}/vehiculos`,
+    { method: 'POST', body: JSON.stringify(datos) }, t, onExp);
