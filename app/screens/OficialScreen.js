@@ -53,9 +53,7 @@ function extraerMatriculaDesdeQR(data) {
       obj.id_usuario ||
       ''
     ).trim();
-  } catch (_) {
-    // No era JSON. Intentar como URL o texto plano.
-  }
+  } catch (_) {}
 
   const fromUrl = raw.match(/(?:matricula|m|alumno)=([^&]+)/i);
   if (fromUrl?.[1]) return decodeURIComponent(fromUrl[1]).trim();
@@ -78,11 +76,17 @@ export default function OficialScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [registrando, setRegistrando] = useState(false);
 
-  // Formulario de vehículo adicional en caseta
-  const [mostrarFormVeh, setMostrarFormVeh]   = useState(false);
-  const [formVeh, setFormVeh]                 = useState({ placas: '', marca: '', modelo: '', color: '', tipo: 'auto' });
-  const [guardandoVeh, setGuardandoVeh]       = useState(false);
-  const [errorVeh, setErrorVeh]               = useState('');
+  const [mostrarFormVeh, setMostrarFormVeh] = useState(false);
+  const [formVeh, setFormVeh] = useState({
+    placas: '',
+    marca: '',
+    modelo: '',
+    color: '',
+    tipo: 'auto',
+  });
+  const [guardandoVeh, setGuardandoVeh] = useState(false);
+  const [errorVeh, setErrorVeh] = useState('');
+
   const TIPOS_VEH = [
     { label: 'Auto', value: 'auto' },
     { label: 'Moto', value: 'moto' },
@@ -149,8 +153,8 @@ export default function OficialScreen({ navigation }) {
       const res = await requestPermission();
       if (!res.granted) {
         Alert.alert(
-          'Permiso de camara',
-          'Se necesita acceso a la camara para escanear el QR del alumno.'
+          'Permiso de cámara',
+          'Se necesita acceso a la cámara para escanear el QR del alumno.'
         );
         return;
       }
@@ -180,7 +184,7 @@ export default function OficialScreen({ navigation }) {
     } catch (e) {
       const msg = e?.message || 'Alumno no encontrado';
       if (origen === 'qr') {
-        Alert.alert('QR no valido o alumno no encontrado', msg);
+        Alert.alert('QR no válido o alumno no encontrado', msg);
       } else {
         setErrorBusq(msg);
       }
@@ -199,40 +203,44 @@ export default function OficialScreen({ navigation }) {
 
     const mat = extraerMatriculaDesdeQR(data);
     console.log('[Oficial] QR raw:', data);
-    console.log('[Oficial] QR matricula extraida:', mat);
+    console.log('[Oficial] QR matrícula extraída:', mat);
 
     if (!mat) {
-      Alert.alert('QR no valido', 'No se pudo obtener la matricula del codigo.');
+      Alert.alert('QR no válido', 'No se pudo obtener la matrícula del código.');
       return;
     }
 
     buscarPorMatricula(mat, 'qr');
   };
 
-  // Registrar vehículo adicional desde caseta y seleccionarlo automáticamente
   const registrarVehiculoCaseta = async () => {
     if (!formVeh.placas.trim() || !formVeh.color.trim()) {
-      setErrorVeh('Placas y color son obligatorios'); return;
+      setErrorVeh('Placas y color son obligatorios');
+      return;
     }
-    setGuardandoVeh(true); setErrorVeh('');
+
+    setGuardandoVeh(true);
+    setErrorVeh('');
+
     try {
       const nuevoVeh = await registrarVehiculoOficial(
         token,
         alumnoEncontrado.id_usuario,
         {
           placas: formVeh.placas.trim(),
-          marca:  formVeh.marca.trim()  || null,
+          marca: formVeh.marca.trim() || null,
           modelo: formVeh.modelo.trim() || null,
-          color:  formVeh.color.trim(),
-          tipo:   formVeh.tipo,
+          color: formVeh.color.trim(),
+          tipo: formVeh.tipo,
         },
         handleTokenExpired
       );
-      // Agregar el nuevo vehículo a la lista y seleccionarlo
+
       setAlumnoEncontrado(prev => ({
         ...prev,
         vehiculos: [...(prev.vehiculos || []), nuevoVeh],
       }));
+
       setVehiculoSelec(nuevoVeh);
       setMostrarFormVeh(false);
       setFormVeh({ placas: '', marca: '', modelo: '', color: '', tipo: 'auto' });
@@ -266,7 +274,7 @@ export default function OficialScreen({ navigation }) {
 
       await cargarDentro(true);
 
-      Alert.alert('Entrada registrada', `${nombre} ingreso al campus.`);
+      Alert.alert('Entrada registrada', `${nombre} ingresó al campus.`);
     } catch (e) {
       console.error('[Oficial] Error entrada:', e?.message || e);
       Alert.alert('Error', e.message || 'No se pudo registrar la entrada.');
@@ -276,7 +284,7 @@ export default function OficialScreen({ navigation }) {
   };
 
   const registrarSalida = (id_alumno, nombre) => {
-    Alert.alert('Registrar salida', `Registrar la salida de ${nombre}?`, [
+    Alert.alert('Registrar salida', `¿Registrar la salida de ${nombre}?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Confirmar',
@@ -317,7 +325,7 @@ export default function OficialScreen({ navigation }) {
 
           <TouchableOpacity
             onPress={() =>
-              Alert.alert('Cerrar sesion', 'Salir?', [
+              Alert.alert('Cerrar sesión', '¿Salir?', [
                 { text: 'Cancelar', style: 'cancel' },
                 { text: 'Salir', style: 'destructive', onPress: logout },
               ])
@@ -343,7 +351,7 @@ export default function OficialScreen({ navigation }) {
 
       <View style={s.accionesCard}>
         <Text style={s.accionesTitulo}>Registrar acceso</Text>
-        <Text style={s.accionesSub}>Escanea el QR del alumno o busca por matricula.</Text>
+        <Text style={s.accionesSub}>Escanea el QR del alumno o busca por matrícula.</Text>
 
         <View style={s.accionesRow}>
           <TouchableOpacity style={s.qrBtn} onPress={abrirScanner}>
@@ -359,7 +367,7 @@ export default function OficialScreen({ navigation }) {
       </View>
 
       <View style={s.buscadorCard}>
-        <Text style={s.buscadorLabel}>Busqueda por matricula</Text>
+        <Text style={s.buscadorLabel}>Búsqueda por matrícula</Text>
         <View style={s.buscadorRow}>
           <TextInput
             ref={inputRef}
@@ -385,7 +393,7 @@ export default function OficialScreen({ navigation }) {
             }
           </TouchableOpacity>
         </View>
-        {!!errorBusq && <Text style={s.errorBusq}>Atencion: {errorBusq}</Text>}
+        {!!errorBusq && <Text style={s.errorBusq}>Atención: {errorBusq}</Text>}
       </View>
 
       <Text style={s.seccion}>Alumnos dentro del campus ({dentro.length})</Text>
@@ -423,9 +431,17 @@ export default function OficialScreen({ navigation }) {
 
             return (
               <View style={s.alumnoCard}>
-                <View style={s.avatar}>
-                  <Text style={s.avatarTxt}>{inicial}</Text>
-                </View>
+                {item.foto_selfie ? (
+                  <Image
+                    source={{ uri: buildFileUrl(item.foto_selfie) }}
+                    style={s.avatarImg}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={s.avatar}>
+                    <Text style={s.avatarTxt}>{inicial}</Text>
+                  </View>
+                )}
 
                 <View style={{ flex: 1 }}>
                   <Text style={s.alumnoNombre}>{nombre}</Text>
@@ -433,7 +449,7 @@ export default function OficialScreen({ navigation }) {
                   <Text style={s.alumnoMeta}>Entrada: {entrada} - {item.tipo_acceso}</Text>
                   {!!item.placas && (
                     <Text style={s.alumnoMeta}>
-                      Vehiculo: {item.placas}{item.marca ? ` - ${item.marca}` : ''}{item.modelo ? ` ${item.modelo}` : ''}
+                      Vehículo: {item.placas}{item.marca ? ` - ${item.marca}` : ''}{item.modelo ? ` ${item.modelo}` : ''}
                     </Text>
                   )}
                 </View>
@@ -450,11 +466,7 @@ export default function OficialScreen({ navigation }) {
         />
       )}
 
-      <Modal
-        visible={scannerVisible}
-        animationType="slide"
-        onRequestClose={() => setScannerVisible(false)}
-      >
+      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
         <View style={s.scannerRoot}>
           <CameraView
             style={StyleSheet.absoluteFillObject}
@@ -465,10 +477,7 @@ export default function OficialScreen({ navigation }) {
 
           <View style={s.scannerTop}>
             <Text style={s.scannerTitle}>Escanear QR</Text>
-            <TouchableOpacity
-              style={s.scannerCerrar}
-              onPress={() => setScannerVisible(false)}
-            >
+            <TouchableOpacity style={s.scannerCerrar} onPress={() => setScannerVisible(false)}>
               <Text style={s.scannerCerrarTxt}>Cerrar</Text>
             </TouchableOpacity>
           </View>
@@ -488,12 +497,7 @@ export default function OficialScreen({ navigation }) {
         </View>
       </Modal>
 
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={cerrarAlumnoModal}
-      >
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={cerrarAlumnoModal}>
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
             {alumnoEncontrado ? (
@@ -503,7 +507,6 @@ export default function OficialScreen({ navigation }) {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
-                {/* Foto de identidad: foto_selfie tiene prioridad sobre inicial */}
                 {alumnoEncontrado.foto_selfie ? (
                   <Image
                     source={{ uri: buildFileUrl(alumnoEncontrado.foto_selfie) }}
@@ -530,14 +533,15 @@ export default function OficialScreen({ navigation }) {
                 {!!alumnoEncontrado.carrera && <Text style={s.modalMeta}>{alumnoEncontrado.carrera}</Text>}
                 {!!alumnoEncontrado.grupo && <Text style={s.modalMeta}>Grupo: {alumnoEncontrado.grupo}</Text>}
 
-                {/* Vehículos registrados */}
                 <View style={[s.vehiculosBox, { width: '100%' }]}>
                   <Text style={s.vehiculosLabel}>Vehículo</Text>
+
                   {(alumnoEncontrado.vehiculos?.length > 0) && alumnoEncontrado.vehiculos.map(v => (
                     <TouchableOpacity
                       key={v.id_vehiculo}
                       style={[s.vehiculoChip, vehiculoSelec?.id_vehiculo === v.id_vehiculo && s.vehiculoChipSel]}
-                      onPress={() => setVehiculoSelec(v)}>
+                      onPress={() => setVehiculoSelec(v)}
+                    >
                       <Text style={[s.vehiculoChipTxt, vehiculoSelec?.id_vehiculo === v.id_vehiculo && { color: GREEN, fontWeight: '700' }]}>
                         {v.placas}{v.marca ? ` · ${v.marca}` : ''}{v.modelo ? ` ${v.modelo}` : ''}{v.color ? ` · ${v.color}` : ''}
                       </Text>
@@ -547,7 +551,6 @@ export default function OficialScreen({ navigation }) {
                     </TouchableOpacity>
                   ))}
 
-                  {/* Registrar otro vehículo */}
                   {!mostrarFormVeh ? (
                     <TouchableOpacity style={s.btnOtroVeh} onPress={() => setMostrarFormVeh(true)}>
                       <Text style={s.btnOtroVehTxt}>+ Registrar otro vehículo</Text>
@@ -555,37 +558,66 @@ export default function OficialScreen({ navigation }) {
                   ) : (
                     <View style={s.formVehBox}>
                       <Text style={s.formVehTitulo}>Nuevo vehículo</Text>
-                      <TextInput style={s.formVehInput} value={formVeh.placas}
+
+                      <TextInput
+                        style={s.formVehInput}
+                        value={formVeh.placas}
                         onChangeText={v => setFormVeh(f => ({ ...f, placas: v }))}
-                        placeholder="Placas *" placeholderTextColor="#aaa" autoCapitalize="characters"/>
-                      <TextInput style={s.formVehInput} value={formVeh.marca}
+                        placeholder="Placas *"
+                        placeholderTextColor="#aaa"
+                        autoCapitalize="characters"
+                      />
+                      <TextInput
+                        style={s.formVehInput}
+                        value={formVeh.marca}
                         onChangeText={v => setFormVeh(f => ({ ...f, marca: v }))}
-                        placeholder="Marca" placeholderTextColor="#aaa"/>
-                      <TextInput style={s.formVehInput} value={formVeh.modelo}
+                        placeholder="Marca"
+                        placeholderTextColor="#aaa"
+                      />
+                      <TextInput
+                        style={s.formVehInput}
+                        value={formVeh.modelo}
                         onChangeText={v => setFormVeh(f => ({ ...f, modelo: v }))}
-                        placeholder="Modelo" placeholderTextColor="#aaa"/>
-                      <TextInput style={s.formVehInput} value={formVeh.color}
+                        placeholder="Modelo"
+                        placeholderTextColor="#aaa"
+                      />
+                      <TextInput
+                        style={s.formVehInput}
+                        value={formVeh.color}
                         onChangeText={v => setFormVeh(f => ({ ...f, color: v }))}
-                        placeholder="Color *" placeholderTextColor="#aaa"/>
+                        placeholder="Color *"
+                        placeholderTextColor="#aaa"
+                      />
+
                       <View style={s.tipoRow}>
                         {TIPOS_VEH.map(t => (
-                          <TouchableOpacity key={t.value}
+                          <TouchableOpacity
+                            key={t.value}
                             style={[s.tipoBtn, formVeh.tipo === t.value && s.tipoBtnSel]}
-                            onPress={() => setFormVeh(f => ({ ...f, tipo: t.value }))}>
+                            onPress={() => setFormVeh(f => ({ ...f, tipo: t.value }))}
+                          >
                             <Text style={[s.tipoBtnTxt, formVeh.tipo === t.value && s.tipoBtnTxtSel]}>
                               {t.label}
                             </Text>
                           </TouchableOpacity>
                         ))}
                       </View>
+
                       {!!errorVeh && <Text style={s.errorVeh}>{errorVeh}</Text>}
+
                       <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity style={s.btnVehCancelar}
-                          onPress={() => { setMostrarFormVeh(false); setErrorVeh(''); }}>
+                        <TouchableOpacity
+                          style={s.btnVehCancelar}
+                          onPress={() => { setMostrarFormVeh(false); setErrorVeh(''); }}
+                        >
                           <Text style={s.btnVehCancelarTxt}>Cancelar</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[s.btnVehGuardar, guardandoVeh && { opacity: 0.6 }]}
-                          onPress={registrarVehiculoCaseta} disabled={guardandoVeh}>
+
+                        <TouchableOpacity
+                          style={[s.btnVehGuardar, guardandoVeh && { opacity: 0.6 }]}
+                          onPress={registrarVehiculoCaseta}
+                          disabled={guardandoVeh}
+                        >
                           {guardandoVeh
                             ? <ActivityIndicator color="#fff" size="small" />
                             : <Text style={s.btnVehGuardarTxt}>Guardar y seleccionar</Text>}
@@ -595,13 +627,20 @@ export default function OficialScreen({ navigation }) {
                   )}
                 </View>
 
-                {/* Estado verificación */}
-                <View style={[s.modalEstado,
+                <View style={[
+                  s.modalEstado,
                   alumnoEncontrado.activo && alumnoEncontrado.identidad_verificada
-                    ? { backgroundColor: GREEN_LIGHT } : { backgroundColor: '#FFEBEE' }]}>
-                  <Text style={[s.modalEstadoTxt, {
-                    color: alumnoEncontrado.activo && alumnoEncontrado.identidad_verificada
-                      ? GREEN : '#C62828' }]}>
+                    ? { backgroundColor: GREEN_LIGHT }
+                    : { backgroundColor: '#FFEBEE' },
+                ]}>
+                  <Text style={[
+                    s.modalEstadoTxt,
+                    {
+                      color: alumnoEncontrado.activo && alumnoEncontrado.identidad_verificada
+                        ? GREEN
+                        : '#C62828',
+                    },
+                  ]}>
                     {alumnoEncontrado.activo && alumnoEncontrado.identidad_verificada
                       ? 'Verificado · Acceso autorizado'
                       : 'Cuenta no verificada · Revisar con coordinación'}
@@ -612,11 +651,16 @@ export default function OficialScreen({ navigation }) {
                   <TouchableOpacity style={s.modalCancelar} onPress={cerrarAlumnoModal}>
                     <Text style={s.modalCancelarTxt}>Cancelar</Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
-                    style={[s.modalConfirmar,
+                    style={[
+                      s.modalConfirmar,
                       !alumnoEncontrado.identidad_verificada && { backgroundColor: '#E65100' },
-                      registrando && { opacity: 0.6 }]}
-                    onPress={registrarEntrada} disabled={registrando}>
+                      registrando && { opacity: 0.6 },
+                    ]}
+                    onPress={registrarEntrada}
+                    disabled={registrando}
+                  >
                     {registrando
                       ? <ActivityIndicator color="#fff" size="small" />
                       : <Text style={s.modalConfirmarTxt}>
@@ -800,6 +844,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
   avatarTxt: { fontSize: 18, fontWeight: '900', color: GREEN },
   alumnoNombre: { fontSize: 14, fontWeight: '900', color: GREEN_DARK },
   alumnoMeta: { fontSize: 12, color: '#7A8A7A', marginTop: 1 },
@@ -954,46 +1003,76 @@ const s = StyleSheet.create({
   vehiculoChipSel: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
   vehiculoChipTxt: { fontSize: 13, color: '#555', flex: 1 },
 
-  // Foto de identidad (selfie)
   modalAvatarImg: {
-    width: 88, height: 88, borderRadius: 44,
-    marginBottom: 12, borderWidth: 2, borderColor: GREEN_LIGHT,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: GREEN_LIGHT,
   },
 
-  // Botón y formulario de vehículo adicional
   btnOtroVeh: {
-    borderWidth: 1, borderColor: GREEN, borderRadius: 10,
-    paddingVertical: 9, alignItems: 'center', marginTop: 8,
+    borderWidth: 1,
+    borderColor: GREEN,
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+    marginTop: 8,
     borderStyle: 'dashed',
   },
   btnOtroVehTxt: { color: GREEN, fontWeight: '700', fontSize: 13 },
   formVehBox: {
-    backgroundColor: '#F4F8F4', borderRadius: 12, padding: 12,
-    marginTop: 8, width: '100%', borderWidth: 0.5, borderColor: '#DDEBDD',
+    backgroundColor: '#F4F8F4',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    width: '100%',
+    borderWidth: 0.5,
+    borderColor: '#DDEBDD',
   },
   formVehTitulo: { fontSize: 13, fontWeight: '800', color: GREEN_DARK, marginBottom: 8 },
   formVehInput: {
-    borderWidth: 1, borderColor: '#DDEBDD', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 9, fontSize: 14,
-    color: '#333', backgroundColor: '#fff', marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#DDEBDD',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    fontSize: 14,
+    color: '#333',
+    backgroundColor: '#fff',
+    marginBottom: 8,
   },
   tipoRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
   tipoBtn: {
-    flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1,
-    borderColor: '#DDEBDD', backgroundColor: '#fff', alignItems: 'center',
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DDEBDD',
+    backgroundColor: '#fff',
+    alignItems: 'center',
   },
   tipoBtnSel: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
   tipoBtnTxt: { fontSize: 12, color: '#888', fontWeight: '600' },
   tipoBtnTxtSel: { color: GREEN, fontWeight: '700' },
   errorVeh: { color: '#C62828', fontSize: 12, marginBottom: 8 },
   btnVehCancelar: {
-    flex: 1, borderWidth: 1, borderColor: '#DDEBDD', borderRadius: 8,
-    paddingVertical: 9, alignItems: 'center', backgroundColor: '#fff',
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#DDEBDD',
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
+    backgroundColor: '#fff',
   },
   btnVehCancelarTxt: { color: '#666', fontWeight: '700', fontSize: 13 },
   btnVehGuardar: {
-    flex: 2, backgroundColor: GREEN, borderRadius: 8,
-    paddingVertical: 9, alignItems: 'center',
+    flex: 2,
+    backgroundColor: GREEN,
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
   },
   btnVehGuardarTxt: { color: '#fff', fontWeight: '800', fontSize: 13 },
 });
