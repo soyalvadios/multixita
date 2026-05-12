@@ -665,4 +665,213 @@ router.get('/docente/reporte/:id_tutoria', verifyToken, async (req, res) => {
   }
 });
 
+// ── POST /api/tutorias/docente/subir-acta ─────────────────────────────────────
+// Recibe PDF del Acta Interna Parcial de SIDIUMB, extrae calificaciones
+// y las inserta/actualiza en la tabla calificaciones.
+// Campo multipart: "acta" (application/pdf)
+// ─────────────────────────────────────────────────────────────────────────────
+const multerActas = require('multer');
+const pathActas   = require('path');
+const fsActas     = require('fs');
+const PDFParser   = require('pdf2json');
+
+const storageActas = multerActas.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = pathActas.join(__dirname, '../../uploads/actas');
+    fsActas.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `acta_${Date.now()}.pdf`);
+  },
+});
+const uploadActa = multerActas({
+  storage: storageActas,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se aceptan archivos PDF'));
+    }
+  },
+});
+
+function extraerTextoPDF(rutaPDF) {
+  return new Promise((resolve, reject) => {
+    const parser = new PDFParser();
+    parser.on('pdfParser_dataReady', data => {
+      try {
+        const texto = data.Pages
+          .map(pg => pg.Texts.map(t => decodeURIComponent(t.R.map(r => r.T).join(''))).join(' '))
+          .join('\n');
+        resolve(texto);
+      } catch (e) {
+        reject(new Error('Error procesando contenido del PDF: ' + e.message));
+      }
+    });
+    parser.on('pdfParser_dataError', err => {
+      reject(new Error('Error leyendo el PDF: ' + (err?.parserError || err)));
+    });
+    parser.loadPDF(rutaPDF);
+  });
+}
+
+function parsearActa(texto) {
+  const resultado = { parcial: null, clave: null, grupo: null, fecha: null, alumnos: [] };
+
+  // Parcial — pdf2json pone el número ANTES de "ACTA INTERNA PARCIAL"
+  const mPA = texto.match(/\b(\d+)\s+ACTA\s+INTERNA\s+PARCIAL\b/i);
+  const mPD = texto.match(/ACTA\s+INTERNA\s+PARCIAL\s+(\d+)/i);
+  if (mPA) resultado.parcial = parseInt(mPA[1]);
+  else if (mPD) resultado.parcial = parseInt(mPD[1]);
+
+  // Clave de asignatura — buscar antes o después de "CLAVE ASIGNATURA"
+  const mCA = texto.match(/([A-Z]{2,4}\d{4})\s+CLAVE\s+ASIGNATURA/i);
+  const mCD = texto.match(/CLAVE\s+ASIGNATURA\s+([A-Z]{2,4}\d{4})/i);
+  const mCG = texto.match(/\b([A-Z]{3}\d{4})\b/);
+  if (mCA) resultado.clave = mCA[1].trim();
+  else if (mCD) resultado.clave = mCD[1].trim();
+  else if (mCG) resultado.clave = mCG[1].trim();
+
+  // Grupo — buscar después de "GRUPO:"
+  const mGrupo = texto.match(/GRUPO:\s*([0-9]{2}[A-Z]{2,3}[0-9]{3})\b/i);
+  if (mGrupo) resultado.grupo = mGrupo[1].trim();
+
+  // Fecha — cualquier DD/MM/YYYY
+  const mFecha = texto.match(/(\d{2}\/\d{2}\/\d{4})/);
+  if (mFecha) {
+    const [d, m, a] = mFecha[1].split('/');
+    resultado.fecha = `${a}-${m}-${d}`;
+  }
+
+  // Alumnos — matrícula 8 dígitos + asistencias + calificación
+  const reAlumno = /\b(\d{8})\b[^]*?(\d+\/\d+)\s+(\d{1,3})\b/g;
+  let match;
+  while ((match = reAlumno.exec(texto)) !== null) {
+    const cal = parseInt(match[3]);
+    if (cal >= 0 && cal <= 100) {
+      resultado.alumnos.push({
+        matricula:    match[1],
+        asistencias:  match[2],
+        calificacion: cal,
+      });
+    }
+  }
+
+  return resultado;
+}
+
+router.post('/docente/subir-acta', verifyToken, uploadActa.single('acta'), async (req, res) => {
+  const rolesPermitidos = ['docente', 'administrador', 'coordinador'];
+  if (!rolesPermitidos.includes(req.usuario.rol))
+    return res.status(403).json({ error: 'Sin permisos' });
+  if (!req.file)
+    return res.status(400).json({ error: 'No se recibió el archivo PDF' });
+
+  const rutaPDF = req.file.path;
+
+  try {
+    // 1. Extraer y parsear
+    const texto = await extraerTextoPDF(rutaPDF);
+    const acta  = parsearActa(texto);
+
+    if (!acta.parcial || !acta.clave || !acta.grupo) {
+      return res.status(422).json({
+        error: 'No se pudo identificar parcial, clave de asignatura o grupo en el PDF.',
+        debug: { parcial: acta.parcial, clave: acta.clave, grupo: acta.grupo },
+      });
+    }
+    if (acta.alumnos.length === 0)
+      return res.status(422).json({ error: 'No se encontraron calificaciones en el PDF.' });
+
+    // 2. Resolver asignación
+    const [[materia]] = await db.query('SELECT id FROM materias WHERE clave = ?', [acta.clave]);
+    if (!materia)
+      return res.status(404).json({ error: `Materia con clave "${acta.clave}" no encontrada.` });
+
+    const [[grupo]] = await db.query('SELECT id FROM grupos WHERE nombre = ?', [acta.grupo]);
+    if (!grupo)
+      return res.status(404).json({ error: `Grupo "${acta.grupo}" no encontrado.` });
+
+    const esDocente = req.usuario.rol === 'docente';
+    const [asigRows] = await db.query(
+      esDocente
+        ? 'SELECT id FROM asignaciones WHERE id_docente=? AND id_materia=? AND id_grupo=? LIMIT 1'
+        : 'SELECT id FROM asignaciones WHERE id_materia=? AND id_grupo=? LIMIT 1',
+      esDocente
+        ? [req.usuario.id_usuario, materia.id, grupo.id]
+        : [materia.id, grupo.id]
+    );
+    if (!asigRows.length)
+      return res.status(404).json({
+        error: `No se encontró asignación para "${acta.clave}" en grupo "${acta.grupo}".`,
+      });
+
+    const idAsignacion = asigRows[0].id;
+    const fechaCaptura = acta.fecha || new Date().toISOString().slice(0, 10);
+
+    // 3. Procesar alumnos
+    const actualizados = [];
+    const errores      = [];
+
+    for (const a of acta.alumnos) {
+      const [[alumno]] = await db.query(
+        'SELECT id_usuario FROM usuarios WHERE matricula = ? AND rol = "alumno"',
+        [a.matricula]
+      );
+      if (!alumno) {
+        errores.push({ matricula: a.matricula, motivo: 'Matrícula no encontrada en el sistema' });
+        continue;
+      }
+      try {
+        await db.query(
+          `INSERT INTO calificaciones
+             (id_alumno, id_asignacion, parcial, calificacion, asistencias, fecha_captura)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             calificacion  = VALUES(calificacion),
+             asistencias   = VALUES(asistencias),
+             fecha_captura = VALUES(fecha_captura)`,
+          [alumno.id_usuario, idAsignacion, acta.parcial, a.calificacion, a.asistencias, fechaCaptura]
+        );
+        actualizados.push({ matricula: a.matricula, calificacion: a.calificacion, asistencias: a.asistencias });
+      } catch (err) {
+        errores.push({ matricula: a.matricula, motivo: err.message });
+      }
+    }
+
+    // 4. Registrar el acta en actas_pdf
+    await db.query(
+      `INSERT INTO actas_pdf (id_asignacion, parcial, ruta_pdf, procesada, alumnos_procesados)
+       VALUES (?, ?, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE
+         ruta_pdf           = VALUES(ruta_pdf),
+         fecha_subida       = NOW(),
+         procesada          = 1,
+         alumnos_procesados = VALUES(alumnos_procesados)`,
+      [idAsignacion, acta.parcial, `/uploads/actas/${req.file.filename}`, actualizados.length]
+    ).catch(() => {});
+
+    // 5. Responder con la estructura que espera DocenteSubirActa.js
+    res.json({
+      ok: true,
+      resumen: {
+        materia:      acta.clave,
+        grupo:        acta.grupo,
+        parcial:      acta.parcial,
+        fecha:        fechaCaptura,
+        actualizados: actualizados.length,
+        errores:      errores.length,
+      },
+      actualizados,
+      errores,
+    });
+
+  } catch (err) {
+    console.error('[subir-acta]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
