@@ -204,6 +204,8 @@ export function buildFileUrl(ruta) {
   return `${BASE_URL.replace(/\/$/, '')}${ruta.startsWith('/') ? ruta : `/${ruta}`}`;
 }
 
+export const getResumenTutoriasAdmin = (t, onExp) =>
+  fetchAuth('/api/tutorias/admin/resumen', {}, t, onExp);
 
 
 export const registrarVehiculoOficial = (t, id_alumno, datos, onExp) =>
