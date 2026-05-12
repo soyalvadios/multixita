@@ -2,7 +2,7 @@
 // Cambia SOLO este valor:
 //   LAN:   'http://192.168.X.X:3000'
 //   ngrok: 'https://xxxx.ngrok-free.app'
-export const BASE_URL = 'http://195.26.245.40:3001';
+export const BASE_URL = 'https://multixita.bienmental.site';
 
 let authToken           = null;
 let unauthorizedHandler = null;
