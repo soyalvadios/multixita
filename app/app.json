@@ -21,7 +21,15 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2E7D32"
       },
-      "package": "mx.umb.multixita"
+      "package": "mx.umb.multixita",
+      "permissions": [
+  "CAMERA",
+  "INTERNET",
+  "ACCESS_NETWORK_STATE",
+  "android.permission.CAMERA",
+  "android.permission.RECORD_AUDIO"
+],
+      "useNextNotificationsApi": true
     },
     "plugins": [
       [
@@ -31,6 +39,11 @@
         }
       ],
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ce894b9b-78e2-4b57-b8a6-301b07ad7e59"
+      }
+    }
   }
 }
