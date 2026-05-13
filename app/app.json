@@ -30,13 +30,9 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "CAMERA",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE",
-        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "abiFilters": ["arm64-v8a"]
     },
     "plugins": [
       [
