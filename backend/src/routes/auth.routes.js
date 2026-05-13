@@ -6,7 +6,7 @@ const db      = require('../config/db');
 const { verifyToken } = require('../middlewares/auth');
 
 const JWT_SECRET  = process.env.JWT_SECRET || 'multixita_secret_2026_umb';
-const JWT_EXPIRES = '7d';
+const JWT_EXPIRES = process.env.JWT_EXPIRES || '24h';
 
 // ── POST /api/auth/login ──────────────────────────────────
 router.post('/login', async (req, res) => {
