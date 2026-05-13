@@ -198,10 +198,11 @@ export const cambiarPassword = (t, datos, onExp) =>
   fetchAuth('/api/alumnos/cambiar-password',
     { method: 'POST', body: JSON.stringify(datos) }, t, onExp);
 
-export function buildFileUrl(ruta) {
+export function buildFileUrl(ruta, token) {
   if (!ruta) return null;
   if (/^https?:\/\//i.test(ruta)) return ruta;
-  return `${BASE_URL.replace(/\/$/, '')}${ruta.startsWith('/') ? ruta : `/${ruta}`}`;
+  const url = `${BASE_URL.replace(/\/$/, '')}${ruta.startsWith('/') ? ruta : `/${ruta}`}`;
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
 }
 
 export const getResumenTutoriasAdmin = (t, onExp) =>
@@ -211,4 +212,5 @@ export const getResumenTutoriasAdmin = (t, onExp) =>
 export const registrarVehiculoOficial = (t, id_alumno, datos, onExp) =>
   fetchAuth(`/api/oficial/alumno/${id_alumno}/vehiculos`,
     { method: 'POST', body: JSON.stringify(datos) }, t, onExp);
+
 
