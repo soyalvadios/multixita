@@ -23,13 +23,12 @@
       },
       "package": "mx.umb.multixita",
       "permissions": [
-  "CAMERA",
-  "INTERNET",
-  "ACCESS_NETWORK_STATE",
-  "android.permission.CAMERA",
-  "android.permission.RECORD_AUDIO"
-],
-      "useNextNotificationsApi": true
+        "CAMERA",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       [
@@ -38,7 +37,8 @@
           "cameraPermission": "MultiXita necesita acceso a la cámara para fotografía de registro y credencial."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font"
     ],
     "extra": {
       "eas": {
