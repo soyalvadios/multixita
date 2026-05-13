@@ -16,10 +16,10 @@ const BADGE = {
   sin_selfie:{ bg: '#F5F5F5', txt: '#757575', label: 'Sin foto' },
 };
 
-function Avatar({ alumno }) {
+function Avatar({ alumno, token }) {
   const archivo = alumno?.foto_selfie || alumno?.foto;
   const uri = archivo
-    ? (archivo.startsWith('http') ? archivo : `${BASE_URL}${archivo}`)
+    ? (archivo.startsWith('http') ? archivo : `${BASE_URL}${archivo}${token ? `?token=${encodeURIComponent(token)}` : ''}`)
     : null;
   if (uri) return <Image source={{ uri }} style={s.avatar} />;
   return (
@@ -129,7 +129,7 @@ export default function CoordinadorAlumnos({ navigation }) {
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('AlumnoDetalle', { alumno: a })}
               >
-                <Avatar alumno={a} />
+                <Avatar alumno={a} token={token} />
                 <View style={s.info}>
                   <Text style={s.name}>{a.nombre} {a.apellido_paterno}</Text>
                   <Text style={s.meta}>{a.matricula || 'Sin matrícula'}</Text>
