@@ -41,10 +41,8 @@ function FotoCard({ titulo, uri, placeholder }) {
   );
 }
 
-function buildUri(ruta) {
-  if (!ruta) return null;
-  if (ruta.startsWith('http')) return ruta;
-  return `${BASE_URL}${ruta}`;  // ← concatena BASE_URL + ruta
+function buildUri(ruta, token) {
+  return buildFileUrl(ruta, token);
 }
 
 export default function CoordinadorAlumnoDetalle({ route, navigation }) {
@@ -403,5 +401,6 @@ const s = StyleSheet.create({
   radioSel:        { borderColor: GREEN, alignItems: 'center', justifyContent: 'center' },
   radioInner:      { width: 10, height: 10, borderRadius: 5, backgroundColor: GREEN },
 });
+
 
 
