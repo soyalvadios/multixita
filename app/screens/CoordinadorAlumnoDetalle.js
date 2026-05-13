@@ -5,7 +5,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { aprobarAlumno, BASE_URL, getBoleta, rechazarAlumno, resetPasswordAdmin } from '../services/api';
+import { aprobarAlumno, buildFileUrl, getBoleta, rechazarAlumno, resetPasswordAdmin } from '../services/api';
 
 const GREEN  = '#2E7D32';
 const DARK   = '#1B5E20';
@@ -62,9 +62,9 @@ export default function CoordinadorAlumnoDetalle({ route, navigation }) {
   const [guardando,     setGuardando]     = useState(false);
 
   // URIs de fotos
-  const fotoSelfieUri = buildUri(alumno?.foto_selfie || alumno?.foto);
-  const credFrenteUri = buildUri(alumno?.foto_credencial?.split('|')[0]);
-  const credReversoUri= buildUri(alumno?.foto_credencial?.split('|')[1]);
+  const fotoSelfieUri = buildUri(alumno?.foto_selfie || alumno?.foto, token);
+  const credFrenteUri = buildUri(alumno?.foto_credencial?.split('|')[0], token);
+  const credReversoUri= buildUri(alumno?.foto_credencial?.split('|')[1], token);
 
   const estadoVerif = ESTADO_VERIF[alumno?.estado_verificacion_facial] || ESTADO_VERIF.sin_selfie;
 
@@ -403,3 +403,4 @@ const s = StyleSheet.create({
   radioSel:        { borderColor: GREEN, alignItems: 'center', justifyContent: 'center' },
   radioInner:      { width: 10, height: 10, borderRadius: 5, backgroundColor: GREEN },
 });
+

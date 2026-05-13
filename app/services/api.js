@@ -211,3 +211,4 @@ export const getResumenTutoriasAdmin = (t, onExp) =>
 export const registrarVehiculoOficial = (t, id_alumno, datos, onExp) =>
   fetchAuth(`/api/oficial/alumno/${id_alumno}/vehiculos`,
     { method: 'POST', body: JSON.stringify(datos) }, t, onExp);
+
