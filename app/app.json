@@ -14,7 +14,10 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "mx.umb.multixita"
+      "bundleIdentifier": "mx.umb.multixita",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

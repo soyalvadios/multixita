@@ -457,7 +457,7 @@ export default function OficialScreen({ navigation }) {
               <View style={s.alumnoCard}>
                 {item.foto_selfie ? (
                   <Image
-                    source={{ uri: buildFileUrl(item.foto_selfie) }}
+                    source={{ uri: buildFileUrl(item.foto_selfie, token) }}
                     style={s.avatarImg}
                     resizeMode="cover"
                   />
@@ -533,7 +533,7 @@ export default function OficialScreen({ navigation }) {
               >
                 {alumnoEncontrado.foto_selfie ? (
                   <Image
-                    source={{ uri: buildFileUrl(alumnoEncontrado.foto_selfie) }}
+                    source={{ uri: buildFileUrl(alumnoEncontrado.foto_selfie, token) }}
                     style={s.modalAvatarImg}
                     resizeMode="cover"
                   />

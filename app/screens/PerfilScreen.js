@@ -165,7 +165,7 @@ export default function PerfilScreen() {
     try {
       const r = await miFoto(token);
       const ruta = r?.foto || r?.foto_selfie;
-      if (ruta) setFotoUri(buildFileUrl(ruta));
+      if (ruta) setFotoUri(buildFileUrl(ruta, token));
     } catch (e) { console.error('[miFoto]', e.message); }
   };
 
