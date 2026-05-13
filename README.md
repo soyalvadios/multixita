@@ -1,7 +1,7 @@
 # MultiXita 🎓📱
 
 <p align="center">
-  <img src="./assets/logo.png" width="220" alt="MultiXita Logo" />
+  <img src="./app/assets/logo.png" width="220" alt="MultiXita Logo" />
 </p>
 
 <p align="center">
