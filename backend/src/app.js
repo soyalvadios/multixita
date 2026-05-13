@@ -15,7 +15,22 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+const uploadsDir = path.join(__dirname, '../uploads');
+
+app.use('/uploads', verifyToken, (req, res) => {
+  const filePath = path.normalize(path.join(uploadsDir, req.path));
+
+  if (!filePath.startsWith(uploadsDir)) {
+    return res.status(403).json({ error: 'Ruta inv�lida' });
+  }
+
+  res.sendFile(filePath, err => {
+    if (err && !res.headersSent) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+  });
+});
 
 // ── Multer storage ─────────────────────────────────────────
 const storage = multer.diskStorage({
@@ -534,3 +549,4 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 module.exports = app;
+
