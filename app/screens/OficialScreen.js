@@ -182,9 +182,23 @@ export default function OficialScreen({ navigation }) {
       setVehiculoSelec(a?.vehiculos?.[0] || null);
       setModalVisible(true);
     } catch (e) {
-      const msg = e?.message || 'Alumno no encontrado';
+      const rawMsg = e?.message || '';
+      const esRedError =
+        rawMsg.includes('Network') ||
+        rawMsg.includes('fetch') ||
+        rawMsg.includes('timeout') ||
+        rawMsg.includes('connect') ||
+        rawMsg.includes('Failed');
+
+      const msg = esRedError
+        ? 'Sin conexión. Verifica la red e intenta de nuevo.'
+        : rawMsg || 'Alumno no encontrado';
+
       if (origen === 'qr') {
-        Alert.alert('QR no válido o alumno no encontrado', msg);
+        Alert.alert(
+          esRedError ? 'Sin conexión' : 'QR no válido',
+          msg
+        );
       } else {
         setErrorBusq(msg);
       }
@@ -254,6 +268,16 @@ export default function OficialScreen({ navigation }) {
 
   const registrarEntrada = async () => {
     if (!alumnoEncontrado) return;
+
+    if (!alumnoEncontrado.activo) {
+      Alert.alert('Acceso denegado', 'La cuenta del alumno está inactiva. Contacta a coordinación.');
+      return;
+    }
+    if (!alumnoEncontrado.identidad_verificada) {
+      Alert.alert('Acceso denegado', 'El alumno no tiene identidad verificada. Contacta a coordinación.');
+      return;
+    }
+
     setRegistrando(true);
 
     try {
